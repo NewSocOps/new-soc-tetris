@@ -56,3 +56,21 @@ You are tasked with creating a new open-source project called
   - `LICENSE-MIT.md` with MIT License.
 - Add a `NOTICE` file with attribution: "Copyright (c) 2025 Nikolay & Microsoft Copilot".
 - In `README.md`, include a "License" section stating:
+
+This project is licensed under either Apache License 2.0 or MIT License, at your option. SPDX: Apache-2.0 OR MIT
+
+- Add SPDX headers (`# SPDX-License-Identifier: Apache-2.0 OR MIT`) to source files.
+
+## Deliverables
+- A working Python project with the above modules.
+- A `README.md` describing:
+- Game concept and rules.
+- How to run the game (pygame and ASCII modes).
+- How to switch AI strategies.
+- License section with dual licensing.
+- Example ASCII illustrations of the board and bank in the README.
+
+## Stretch Goals (optional)
+- Add replay saving and playback.
+- Add configurable AI parameters.
+- Add tournament mode (multiple matches with statistics).
