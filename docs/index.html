@@ -544,11 +544,11 @@ class GameBoard:
                 if cell:
                     if cell == 'G':
                         # Gray for garbage
-                        line += f'<span style="color: #808080; font-weight: bold;">█</span>'
+                        line += '<span style="color: #808080; font-weight: bold;">█</span>'
                     else:
                         # Colored block for each piece type
                         color = COLORS.get(cell, "#39ff14")
-                        line += f'<span style="color: {color}; font-weight: bold;">█</span>'
+                        line += '<span style="color: ' + color + '; font-weight: bold;">█</span>'
                 else:
                     line += " "
             line += "|"
@@ -837,7 +837,7 @@ def bank_text(bank: FigureBank) -> str:
         count = state[piece]
         color = COLORS.get(piece, "#39ff14")
         # Color the piece letter in its signature color
-        colored_piece = f'<span style="color: {color}; font-weight: bold;">{piece}</span>'
+        colored_piece = '<span style="color: ' + color + '; font-weight: bold;">' + piece + '</span>'
         # Dim the count if low
         if count <= 2:
             count_style = 'color: #ff3b30; font-weight: bold;'  # Red for critical
@@ -1086,7 +1086,7 @@ def format_thinking(ai_name, thinking_data):
     
     piece_color = COLORS.get(thinking_data["piece"], "#39ff14")
     lines = [
-        f'<span style="color: {piece_color}; font-weight: bold; font-size: 1.1rem;">{ai_name}</span> received piece <span style="color: {piece_color}; font-weight: bold;">{thinking_data["piece"]}</span>',
+        '<span style="color: ' + piece_color + '; font-weight: bold; font-size: 1.1rem;">' + ai_name + '</span> received piece <span style="color: ' + piece_color + '; font-weight: bold;">' + thinking_data["piece"] + '</span>',
         f'<span style="color: #888;">Evaluated {thinking_data["total_options"]} possible placements in {thinking_data["decision_time"]*1000:.1f}ms</span>',
         "",
         '<span style="color: #1e88e5; font-weight: bold;">🏆 Top 5 Placements Considered:</span>'
@@ -1105,16 +1105,16 @@ def format_thinking(ai_name, thinking_data):
         placement_desc = f'x={eval_data["x"]}, rot={eval_data["rotation"]}'
         
         lines.append(
-            f'<span style="color: {color}; font-weight: {font_weight};">'
-            f'{prefix} {placement_desc}: score={score:.1f} '
-            f'(h={m["height"]}, holes={m["holes"]}, bump={m["bumpiness"]}, lines={m["lines"]})'
-            f'</span>'
+            '<span style="color: ' + color + '; font-weight: ' + font_weight + ';">' +
+            f'{prefix} {placement_desc}: score={score:.1f} ' +
+            f'(h={m["height"]}, holes={m["holes"]}, bump={m["bumpiness"]}, lines={m["lines"]})' +
+            '</span>'
         )
     
     lines.append("")
     lines.append(
-        f'<span style="color: #39ff14; font-weight: bold;">➤ CHOSEN: '
-        f'x={thinking_data["best"][0]}, rotation={thinking_data["best"][2]} '
+        '<span style="color: #39ff14; font-weight: bold;">➤ CHOSEN: ' +
+        f'x={thinking_data["best"][0]}, rotation={thinking_data["best"][2]} ' +
         f'(score: {thinking_data["best_score"]:.1f})</span>'
     )
     
@@ -1155,7 +1155,7 @@ class Commentator:
             "dramatic": "#a000f0"
         }
         color = colors.get(style, "#e2e2e2")
-        self.commentary_log.append(f'<div style="color: {color}; margin: 4px 0;">{text}</div>')
+        self.commentary_log.append('<div style="color: ' + color + '; margin: 4px 0;">' + text + '</div>')
         
     def clear(self):
         """Clear commentary log."""
@@ -1171,8 +1171,8 @@ class Commentator:
     def commentate_move(self, ai_name, piece_type, board, lines_cleared, attack_piece):
         """Generate commentary for a single move."""
         piece_color = COLORS.get(piece_type, "#39ff14")
-        piece_html = f'<span style="color: {piece_color}; font-weight: bold;">{piece_type}</span>'
-        ai_html = f'<span style="font-weight: bold;">{ai_name}</span>'
+        piece_html = '<span style="color: ' + piece_color + '; font-weight: bold;">' + piece_type + '</span>'
+        ai_html = '<span style="font-weight: bold;">' + ai_name + '</span>'
         
         height = board.get_max_height()
         ai_key = "ai1" if "AI-1" in ai_name else "ai2"
@@ -1194,7 +1194,7 @@ class Commentator:
             if attack_piece:
                 attack_color = COLORS.get(attack_piece, "#39ff14")
                 self.add_comment(
-                    f'💣 And sends <span style="color: {attack_color}; font-weight: bold;">{attack_piece}</span> as a devastating counter-attack!',
+                    '💣 And sends <span style="color: ' + attack_color + '; font-weight: bold;">' + attack_piece + '</span> as a devastating counter-attack!',
                     "achievement"
                 )
             return
