@@ -246,6 +246,7 @@ table tr:hover {
   <button id="resume" disabled>▶️ Resume</button>
   <button id="step" disabled>⏭️ Step</button>
   <button id="restart" class="secondary" disabled>🔄 Restart</button>
+  <button id="export-replay" class="secondary" disabled>💾 Export Replay</button>
   <label for="speed">Speed:</label>
   <input id="speed" type="range" min="50" max="600" value="150" step="10" />
   <span id="speed-value">150 ms</span>
@@ -770,6 +771,7 @@ class MatchController:
         resume_button.disabled = not self.is_paused or finished
         step_button.disabled = not self.is_paused or finished
         restart_button.disabled = not self.is_running and not finished
+        export_button.disabled = not finished
 
 controller = MatchController()
 
@@ -778,6 +780,7 @@ pause_button = document.getElementById("pause")
 resume_button = document.getElementById("resume")
 step_button = document.getElementById("step")
 restart_button = document.getElementById("restart")
+export_button = document.getElementById("export-replay")
 status_element = document.getElementById("status")
 board1_element = document.getElementById("board1")
 board2_element = document.getElementById("board2")
@@ -1053,6 +1056,67 @@ ascii_handler = create_proxy(switch_to_ascii)
 canvas_handler = create_proxy(switch_to_canvas)
 view_ascii_button.addEventListener("click", ascii_handler)
 view_canvas_button.addEventListener("click", canvas_handler)
+
+
+# --- Replay Export -----------------------------------------------------------
+
+def export_replay(event=None):
+    if not controller.arena or not controller.match_stats["turns"]:
+        return
+    
+    from js import Date
+    timestamp = Date.new().toISOString()
+    
+    replay_data = {
+        "version": "1.0",
+        "timestamp": timestamp,
+        "match_info": {
+            "ai1_name": controller.arena.ai1.name,
+            "ai2_name": controller.arena.ai2.name,
+            "ai1_strategy": controller.arena.ai1.strategy,
+            "ai2_strategy": controller.arena.ai2.strategy,
+            "max_turns": controller.arena.max_turns,
+        },
+        "final_state": {
+            "winner": "AI-1" if controller.arena.board1.score > controller.arena.board2.score else "AI-2",
+            "ai1_score": controller.arena.board1.score,
+            "ai2_score": controller.arena.board2.score,
+            "ai1_lines": controller.arena.board1.lines_cleared,
+            "ai2_lines": controller.arena.board2.lines_cleared,
+            "total_turns": controller.arena.turn,
+            "bank_remaining": controller.arena.bank.get_total_remaining(),
+        },
+        "statistics": {
+            "ai1_avg_decision_time_ms": controller.arena.ai1.get_average_decision_time() * 1000,
+            "ai2_avg_decision_time_ms": controller.arena.ai2.get_average_decision_time() * 1000,
+            "ai1_total_decisions": len(controller.arena.ai1.decision_times),
+            "ai2_total_decisions": len(controller.arena.ai2.decision_times),
+        },
+        "history": {
+            "turns": controller.match_stats["turns"],
+            "ai1_scores": controller.match_stats["ai1_scores"],
+            "ai2_scores": controller.match_stats["ai2_scores"],
+            "ai1_lines": controller.match_stats["ai1_lines"],
+            "ai2_lines": controller.match_stats["ai2_lines"],
+        }
+    }
+    
+    from js import JSON, Blob, URL, document as doc
+    json_str = JSON.stringify(replay_data, None, 2)
+    blob = Blob.new([json_str], {"type": "application/json"})
+    url = URL.createObjectURL(blob)
+    
+    link = doc.createElement("a")
+    link.href = url
+    link.download = f"tetris_replay_{timestamp.replace(':', '-').replace('.', '_')}.json"
+    link.click()
+    
+    URL.revokeObjectURL(url)
+    status_element.textContent = "Replay exported successfully!"
+
+
+export_handler = create_proxy(export_replay)
+export_button.addEventListener("click", export_handler)
 </py-script>
 </body>
 </html>
