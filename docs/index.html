@@ -108,6 +108,67 @@ footer {
   font-size: 0.8rem;
   color: #8c8c8c;
 }
+
+.tournament-section {
+  margin-top: 32px;
+  padding: 20px;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+}
+
+.tournament-section h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.tournament-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tournament-controls label {
+  font-size: 0.9rem;
+}
+
+.tournament-controls input[type="number"] {
+  width: 60px;
+  padding: 4px 8px;
+  background-color: #2a2a2a;
+  color: #e2e2e2;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+table th, table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+
+table th {
+  background-color: #2a2a2a;
+  font-weight: 600;
+}
+
+table tr:hover {
+  background-color: #252525;
+}
+
+#tournament-results {
+  display: none;
+}
+
+#tournament-results.visible {
+  display: block;
+}
 </style>
 </head>
 <body>
@@ -134,6 +195,37 @@ footer {
   </div>
 </div>
 <pre id="bank"></pre>
+
+<div class="tournament-section">
+  <h2>🏆 Tournament Mode</h2>
+  <div class="tournament-controls">
+    <label for="num-matches">Number of matches:</label>
+    <input id="num-matches" type="number" min="1" max="50" value="5" />
+    <button id="start-tournament">🎯 Run Tournament</button>
+    <button id="clear-tournament" class="secondary">🗑️ Clear Results</button>
+  </div>
+  <div id="tournament-results">
+    <h3>Results</h3>
+    <table id="tournament-table">
+      <thead>
+        <tr>
+          <th>Match #</th>
+          <th>Winner</th>
+          <th>AI-1 Score</th>
+          <th>AI-2 Score</th>
+          <th>Turns</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="tournament-tbody"></tbody>
+    </table>
+    <div style="margin-top: 16px; padding: 12px; background-color: #2a2a2a; border-radius: 4px;">
+      <strong>Summary:</strong>
+      <div id="tournament-summary"></div>
+    </div>
+  </div>
+</div>
+
 <footer>
   Powered by PyScript. Runs entirely in the browser without servers or binaries.
 </footer>
@@ -620,6 +712,124 @@ speed_slider.addEventListener("input", speed_handler)
 
 controller.update_buttons()
 update_speed_label()
+
+
+# --- Tournament Mode ---------------------------------------------------------
+
+tournament_results = []
+start_tournament_button = document.getElementById("start-tournament")
+clear_tournament_button = document.getElementById("clear-tournament")
+num_matches_input = document.getElementById("num-matches")
+tournament_results_div = document.getElementById("tournament-results")
+tournament_tbody = document.getElementById("tournament-tbody")
+tournament_summary = document.getElementById("tournament-summary")
+
+
+async def run_tournament(event=None):
+    global tournament_results
+    if controller.is_running:
+        return
+    
+    num_matches = int(num_matches_input.value)
+    if num_matches < 1 or num_matches > 50:
+        status_element.textContent = "Please enter 1-50 matches"
+        return
+    
+    start_tournament_button.disabled = True
+    clear_tournament_button.disabled = True
+    start_button.disabled = True
+    status_element.textContent = f"Running tournament: 0/{num_matches} matches completed..."
+    
+    for match_num in range(1, num_matches + 1):
+        bank = FigureBank(initial_count=12)
+        ai1 = AIAgent("AI-1", strategy="greedy")
+        ai2 = AIAgent("AI-2", strategy="aggressive")
+        arena = Arena(ai1, ai2, bank, max_turns=320)
+        
+        state = None
+        while True:
+            state = arena.step()
+            if state["finished"]:
+                break
+            await asyncio.sleep(0.001)
+        
+        tournament_results.append({
+            "match": match_num,
+            "winner": state["winner"],
+            "ai1_score": state["scores"]["ai1"],
+            "ai2_score": state["scores"]["ai2"],
+            "turns": state["turn"],
+            "reason": state["reason"]
+        })
+        
+        status_element.textContent = f"Running tournament: {match_num}/{num_matches} matches completed..."
+        await asyncio.sleep(0.05)
+    
+    display_tournament_results()
+    start_tournament_button.disabled = False
+    clear_tournament_button.disabled = False
+    start_button.disabled = False
+    status_element.textContent = f"Tournament complete! {num_matches} matches finished."
+
+
+def display_tournament_results():
+    global tournament_results
+    if not tournament_results:
+        return
+    
+    tournament_tbody.innerHTML = ""
+    for result in tournament_results:
+        row = document.createElement("tr")
+        row.innerHTML = f"""
+            <td>{result['match']}</td>
+            <td><strong>{result['winner']}</strong></td>
+            <td>{result['ai1_score']}</td>
+            <td>{result['ai2_score']}</td>
+            <td>{result['turns']}</td>
+            <td>{result['reason']}</td>
+        """
+        tournament_tbody.appendChild(row)
+    
+    ai1_wins = sum(1 for r in tournament_results if r["winner"] == "AI-1")
+    ai2_wins = sum(1 for r in tournament_results if r["winner"] == "AI-2")
+    total = len(tournament_results)
+    avg_ai1_score = sum(r["ai1_score"] for r in tournament_results) / total
+    avg_ai2_score = sum(r["ai2_score"] for r in tournament_results) / total
+    avg_turns = sum(r["turns"] for r in tournament_results) / total
+    
+    tournament_summary.innerHTML = f"""
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px;">
+            <div>
+                <strong>AI-1 Wins:</strong> {ai1_wins}/{total} ({ai1_wins*100/total:.1f}%)<br/>
+                <strong>Avg Score:</strong> {avg_ai1_score:.0f}
+            </div>
+            <div>
+                <strong>AI-2 Wins:</strong> {ai2_wins}/{total} ({ai2_wins*100/total:.1f}%)<br/>
+                <strong>Avg Score:</strong> {avg_ai2_score:.0f}
+            </div>
+            <div>
+                <strong>Avg Turns:</strong> {avg_turns:.1f}<br/>
+                <strong>Total Matches:</strong> {total}
+            </div>
+        </div>
+    """
+    
+    tournament_results_div.classList.add("visible")
+
+
+def clear_tournament_results(event=None):
+    global tournament_results
+    tournament_results = []
+    tournament_tbody.innerHTML = ""
+    tournament_summary.innerHTML = ""
+    tournament_results_div.classList.remove("visible")
+    status_element.textContent = "Tournament results cleared."
+
+
+tournament_handler = create_proxy(lambda e: asyncio.ensure_future(run_tournament(e)))
+clear_handler = create_proxy(clear_tournament_results)
+start_tournament_button.addEventListener("click", tournament_handler)
+clear_tournament_button.addEventListener("click", clear_handler)
 </py-script>
 </body>
 </html>
