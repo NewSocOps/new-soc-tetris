@@ -770,7 +770,7 @@ def board_text(board: GameBoard) -> str:
 
 def bank_text(bank: FigureBank) -> str:
     """Generate ASCII bank display with colored piece indicators."""
-    lines = ["<span style='color: #39ff14; font-weight: bold;'>🎲 FIGURE BANK</span>"]
+    lines = ['<span style="color: #39ff14; font-weight: bold;">🎲 FIGURE BANK</span>']
     state = bank.get_state()
     for piece in TETROMINO_TYPES:
         count = state[piece]
@@ -784,9 +784,9 @@ def bank_text(bank: FigureBank) -> str:
             count_style = 'color: #ff9500; font-weight: bold;'  # Orange for low
         else:
             count_style = 'color: #e2e2e2;'  # Normal
-        lines.append(f"{colored_piece}: <span style='{count_style}'>{count:02d}</span>")
+        lines.append(f'{colored_piece}: <span style="{count_style}">{count:02d}</span>')
     total = sum(state.values())
-    lines.append(f"<span style='color: #39ff14;'>Total: {total}</span>")
+    lines.append(f'<span style="color: #39ff14;">Total: {total}</span>')
     return "\n".join(lines)
 
 
