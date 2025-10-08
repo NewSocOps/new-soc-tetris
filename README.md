@@ -10,6 +10,15 @@
 
 ---
 
+## 🎯 Our Mission
+
+> **"Развлекая — вдохновляем. Играя — обучаем. Побеждая — помогаем."**  
+> *"Entertaining to inspire. Playing to learn. Winning to help."*
+
+This project demonstrates that AI can be **fun, educational, and purposeful**. We build engaging experiences that teach algorithmic thinking while creating opportunities to support the next generation of developers.
+
+---
+
 ## 📖 Project Story: How This Was Built
 
 This project started as a simple idea: *"What if Tetris had resource management and AI could attack each other strategically?"*
@@ -267,6 +276,23 @@ SPDX-License-Identifier: `Apache-2.0 OR MIT`
 *This README was co-written by a human and AI, documenting the authentic development process. The collaboration itself became part of the project's story — showing how mutual respect and clear communication can lead to exceptional results.*
 
 **Philosophy:** Great software emerges from great partnerships, whether human-human or human-AI.
+
+---
+
+## 💫 Our Commitment
+
+We believe in the power of technology to **inspire, educate, and elevate**. Through this project, we aim to:
+
+- 🎓 **Make AI accessible** — No PhD required to understand heuristics
+- 🎮 **Make learning fun** — Entertainment as a gateway to knowledge  
+- 🤝 **Support emerging talent** — Channel success back to the community
+- 🌱 **Build sustainably** — Ethical monetization, transparent practices
+
+Every line of code, every feature, every decision serves one goal: **opening doors for the next generation of innovators**.
+
+> *"Развлекая — вдохновляем. Играя — обучаем. Побеждая — помогаем."*
+
+**Join us on this journey.** 🚀✨
 
 ---
 
