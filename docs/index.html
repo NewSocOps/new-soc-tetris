@@ -119,6 +119,39 @@ canvas {
   margin-top: 24px;
 }
 
+.stats-section {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.stat-card {
+  padding: 12px;
+  background-color: #2a2a2a;
+  border-radius: 4px;
+  border-left: 3px solid #1e88e5;
+}
+
+.stat-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.stat-card .value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #39ff14;
+}
+
 footer {
   margin-top: 36px;
   font-size: 0.8rem;
@@ -235,6 +268,11 @@ table tr:hover {
   </div>
 </div>
 <pre id="bank"></pre>
+
+<div class="stats-section" id="stats-section" style="display: none;">
+  <h2>📊 Match Statistics</h2>
+  <div class="stats-grid" id="stats-grid"></div>
+</div>
 
 <div class="tournament-section">
   <h2>🏆 Tournament Mode</h2>
@@ -637,6 +675,13 @@ class MatchController:
         self.is_running = False
         self.is_paused = False
         self.current_task = None
+        self.match_stats = {
+            "turns": [],
+            "ai1_scores": [],
+            "ai2_scores": [],
+            "ai1_lines": [],
+            "ai2_lines": [],
+        }
         
     def update_ui(self):
         if self.arena:
@@ -663,6 +708,56 @@ class MatchController:
             status_element.textContent += (
                 f" | Winner: {state['winner']} (reason: {state['reason']})"
             )
+    
+    def collect_stats(self, state):
+        self.match_stats["turns"].append(state["turn"])
+        self.match_stats["ai1_scores"].append(state["scores"]["ai1"])
+        self.match_stats["ai2_scores"].append(state["scores"]["ai2"])
+        self.match_stats["ai1_lines"].append(state["lines"]["ai1"])
+        self.match_stats["ai2_lines"].append(state["lines"]["ai2"])
+    
+    def display_stats(self):
+        if not self.arena:
+            return
+        
+        ai1_avg_time = self.arena.ai1.get_average_decision_time() * 1000
+        ai2_avg_time = self.arena.ai2.get_average_decision_time() * 1000
+        
+        stats_grid.innerHTML = f"""
+            <div class="stat-card">
+                <h4>AI-1 Final Score</h4>
+                <div class="value">{self.arena.board1.score}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-2 Final Score</h4>
+                <div class="value">{self.arena.board2.score}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-1 Lines Cleared</h4>
+                <div class="value">{self.arena.board1.lines_cleared}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-2 Lines Cleared</h4>
+                <div class="value">{self.arena.board2.lines_cleared}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-1 Avg Decision Time</h4>
+                <div class="value">{ai1_avg_time:.1f} ms</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-2 Avg Decision Time</h4>
+                <div class="value">{ai2_avg_time:.1f} ms</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Turns</h4>
+                <div class="value">{self.arena.turn}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Bank Pieces Remaining</h4>
+                <div class="value">{self.arena.bank.get_total_remaining()}</div>
+            </div>
+        """
+        stats_section.style.display = "block"
     
     def update_buttons(self, running=None, paused=None, finished=False):
         if running is not None:
@@ -699,6 +794,8 @@ ctx1 = canvas1.getContext("2d")
 ctx2 = canvas2.getContext("2d")
 view_ascii_button = document.getElementById("view-ascii")
 view_canvas_button = document.getElementById("view-canvas")
+stats_section = document.getElementById("stats-section")
+stats_grid = document.getElementById("stats-grid")
 
 use_canvas_view = False
 
@@ -734,10 +831,12 @@ async def run_match(event=None):
         state = controller.arena.step()
         controller.update_ui()
         controller.update_status(state)
+        controller.collect_stats(state)
         
         if state["finished"]:
             controller.is_running = False
             controller.update_buttons(finished=True)
+            controller.display_stats()
             break
             
         delay = max(int(speed_slider.value), 50) / 1000.0
@@ -768,10 +867,18 @@ def restart_match(event=None):
     controller.is_running = False
     controller.is_paused = False
     controller.arena = None
+    controller.match_stats = {
+        "turns": [],
+        "ai1_scores": [],
+        "ai2_scores": [],
+        "ai1_lines": [],
+        "ai2_lines": [],
+    }
     controller.update_buttons()
     board1_element.textContent = ""
     board2_element.textContent = ""
     bank_element.textContent = ""
+    stats_section.style.display = "none"
     status_element.textContent = "Press 'Start Match' to begin a new simulation."
 
 
