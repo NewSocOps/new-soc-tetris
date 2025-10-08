@@ -347,6 +347,17 @@ SHAPES = {
     "J": [[0, 1], [0, 1], [1, 1]],
 }
 
+# Classic Tetris colors (The Tetris Company standard)
+COLORS = {
+    "I": "#00f0f0",  # Cyan
+    "O": "#f0f000",  # Yellow
+    "T": "#a000f0",  # Purple
+    "S": "#00f000",  # Green
+    "Z": "#f00000",  # Red
+    "L": "#f0a000",  # Orange
+    "J": "#0000f0",  # Blue
+}
+
 TETROMINO_TYPES = list(SHAPES.keys())
 
 
@@ -376,7 +387,7 @@ class GameBoard:
     def __init__(self, width: int = 10, height: int = 20):
         self.width = width
         self.height = height
-        self.grid = [[0 for _ in range(width)] for _ in range(height)]
+        self.grid = [[None for _ in range(width)] for _ in range(height)]
         self.score = 0
         self.lines_cleared = 0
         self.game_over = False
@@ -403,13 +414,13 @@ class GameBoard:
                     board_y = y + row_idx
                     board_x = x + col_idx
                     if 0 <= board_y < self.height and 0 <= board_x < self.width:
-                        self.grid[board_y][board_x] = 1
+                        self.grid[board_y][board_x] = piece.type
 
     def clear_lines(self) -> int:
         completed = [index for index, row in enumerate(self.grid) if all(row)]
         for idx in completed:
             del self.grid[idx]
-            self.grid.insert(0, [0 for _ in range(self.width)])
+            self.grid.insert(0, [None for _ in range(self.width)])
         cleared = len(completed)
         if cleared:
             self.lines_cleared += cleared
@@ -420,9 +431,9 @@ class GameBoard:
     def add_garbage_lines(self, num_lines: int):
         for _ in range(num_lines):
             self.grid.pop(0)
-            garbage = [1 for _ in range(self.width)]
+            garbage = ['G' for _ in range(self.width)]
             hole = random.randint(0, self.width - 1)
-            garbage[hole] = 0
+            garbage[hole] = None
             self.grid.append(garbage)
 
     def is_game_over(self) -> bool:
@@ -671,18 +682,32 @@ def bank_text(bank: FigureBank) -> str:
 # --- Canvas Rendering --------------------------------------------------------
 
 def draw_board_canvas(ctx, board: GameBoard):
-    """Draw the game board on a canvas."""
+    """Draw the game board on a canvas with colored pieces."""
     cell_size = 20
     ctx.fillStyle = "#000000"
     ctx.fillRect(0, 0, 200, 400)
     
     for y in range(board.height):
         for x in range(board.width):
-            if board.grid[y][x]:
-                ctx.fillStyle = "#39ff14"
+            cell = board.grid[y][x]
+            if cell:
+                # Use piece-specific color, or gray for garbage
+                if cell == 'G':
+                    ctx.fillStyle = "#808080"  # Gray for garbage
+                else:
+                    ctx.fillStyle = COLORS.get(cell, "#39ff14")
+                
                 ctx.fillRect(x * cell_size, y * cell_size, cell_size, cell_size)
-                ctx.strokeStyle = "#2a2a2a"
+                
+                # Draw border with slight highlight effect
+                ctx.strokeStyle = "#000000"
+                ctx.lineWidth = 2
                 ctx.strokeRect(x * cell_size, y * cell_size, cell_size, cell_size)
+                
+                # Inner highlight for 3D effect
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"
+                ctx.lineWidth = 1
+                ctx.strokeRect(x * cell_size + 2, y * cell_size + 2, cell_size - 4, cell_size - 4)
 
 
 def draw_bank_canvas(ctx, bank: FigureBank):
@@ -704,24 +729,35 @@ def draw_bank_canvas(ctx, bank: FigureBank):
         count = state[piece_type]
         bar_height = (count / max_count) * max_height if max_count > 0 else 0
         
-        # Draw bar
-        ctx.fillStyle = "#39ff14" if count > 5 else "#ff9500" if count > 2 else "#ff3b30"
+        # Draw bar with piece color (dimmed if low count)
+        base_color = COLORS.get(piece_type, "#39ff14")
+        if count <= 2:
+            # Red tint for critically low
+            ctx.fillStyle = "#ff3b30"
+        elif count <= 5:
+            # Orange tint for low
+            ctx.fillStyle = "#ff9500"
+        else:
+            # Use piece's natural color
+            ctx.fillStyle = base_color
+        
         ctx.fillRect(x, y_baseline - bar_height, bar_width, bar_height)
         
         # Draw border
-        ctx.strokeStyle = "#2a2a2a"
+        ctx.strokeStyle = "#000000"
+        ctx.lineWidth = 2
         ctx.strokeRect(x, y_baseline - bar_height, bar_width, bar_height)
         
-        # Draw piece type label
-        ctx.fillStyle = "#e2e2e2"
-        ctx.font = "bold 14px monospace"
+        # Draw piece type label with its color
+        ctx.fillStyle = base_color
+        ctx.font = "bold 16px monospace"
         ctx.textAlign = "center"
-        ctx.fillText(piece_type, x + bar_width / 2, y_baseline + 15)
+        ctx.fillText(piece_type, x + bar_width / 2, y_baseline + 18)
         
         # Draw count
-        ctx.fillStyle = "#aaa"
-        ctx.font = "12px monospace"
-        ctx.fillText(str(count), x + bar_width / 2, y_baseline - bar_height - 5)
+        ctx.fillStyle = "#ffffff"
+        ctx.font = "bold 14px monospace"
+        ctx.fillText(str(count), x + bar_width / 2, y_baseline - bar_height - 8)
 
 
 # --- UI State Management -----------------------------------------------------
