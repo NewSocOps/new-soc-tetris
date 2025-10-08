@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>AI vs AI Tetris (PyScript)</title>
+<link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+<script type="module" src="https://pyscript.net/latest/pyscript.js"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background-color: #111;
+  color: #e2e2e2;
+  margin: 0;
+  padding: 32px 24px;
+}
+
+h1 {
+  margin-top: 0;
+  letter-spacing: 1px;
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+button {
+  padding: 8px 16px;
+  background-color: #1e88e5;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+label {
+  font-size: 0.9rem;
+}
+
+input[type="range"] {
+  width: 160px;
+}
+
+#status {
+  margin: 12px 0 24px 0;
+  font-size: 1rem;
+}
+
+.boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.board {
+  min-width: 240px;
+}
+
+.board h2 {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+}
+
+pre {
+  background-color: #000;
+  color: #39ff14;
+  padding: 12px;
+  line-height: 1.1;
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(0, 255, 0, 0.15);
+  overflow-x: auto;
+}
+
+#bank {
+  margin-top: 24px;
+}
+
+footer {
+  margin-top: 36px;
+  font-size: 0.8rem;
+  color: #8c8c8c;
+}
+</style>
+</head>
+<body>
+<h1>AI vs AI Tetris (PyScript)</h1>
+<div id="controls">
+  <button id="start">Start Match</button>
+  <label for="speed">Delay per frame:</label>
+  <input id="speed" type="range" min="50" max="600" value="150" step="10" />
+  <span id="speed-value">150 ms</span>
+</div>
+<div id="status">Press "Start Match" to begin the simulation.</div>
+<div class="boards">
+  <div class="board">
+    <h2 id="ai1-name">AI-1</h2>
+    <pre id="board1"></pre>
+  </div>
+  <div class="board">
+    <h2 id="ai2-name">AI-2</h2>
+    <pre id="board2"></pre>
+  </div>
+</div>
+<pre id="bank"></pre>
+<footer>
+  Powered by PyScript. Runs entirely in the browser without servers or binaries.
+</footer>
+<py-config>
+  packages = []
+</py-config>
+<py-script>
+import asyncio
+import random
+import time
+from js import document
+from pyodide.ffi import create_proxy
+
+# --- Core data structures ----------------------------------------------------
+
+SHAPES = {
+    "I": [[1, 1, 1, 1]],
+    "O": [[1, 1], [1, 1]],
+    "T": [[0, 1, 0], [1, 1, 1]],
+    "S": [[0, 1, 1], [1, 1, 0]],
+    "Z": [[1, 1, 0], [0, 1, 1]],
+    "L": [[1, 0], [1, 0], [1, 1]],
+    "J": [[0, 1], [0, 1], [1, 1]],
+}
+
+TETROMINO_TYPES = list(SHAPES.keys())
+
+
+def clone_shape(shape):
+    return [row[:] for row in shape]
+
+
+class Tetromino:
+    def __init__(self, shape_type: str):
+        self.type = shape_type
+        self.shape = clone_shape(SHAPES[shape_type])
+        self.rotation = 0
+
+    def rotate(self):
+        rotated = [list(row) for row in zip(*self.shape[::-1])]
+        self.shape = rotated
+        self.rotation = (self.rotation + 1) % 4
+
+    def get_width(self):
+        return len(self.shape[0]) if self.shape else 0
+
+    def get_height(self):
+        return len(self.shape)
+
+
+class GameBoard:
+    def __init__(self, width: int = 10, height: int = 20):
+        self.width = width
+        self.height = height
+        self.grid = [[0 for _ in range(width)] for _ in range(height)]
+        self.score = 0
+        self.lines_cleared = 0
+        self.game_over = False
+
+    def can_place(self, piece: Tetromino, x: int, y: int) -> bool:
+        for row_idx, row in enumerate(piece.shape):
+            for col_idx, cell in enumerate(row):
+                if not cell:
+                    continue
+                board_y = y + row_idx
+                board_x = x + col_idx
+                if board_x < 0 or board_x >= self.width:
+                    return False
+                if board_y < 0 or board_y >= self.height:
+                    return False
+                if self.grid[board_y][board_x]:
+                    return False
+        return True
+
+    def place_piece(self, piece: Tetromino, x: int, y: int):
+        for row_idx, row in enumerate(piece.shape):
+            for col_idx, cell in enumerate(row):
+                if cell:
+                    board_y = y + row_idx
+                    board_x = x + col_idx
+                    if 0 <= board_y < self.height and 0 <= board_x < self.width:
+                        self.grid[board_y][board_x] = 1
+
+    def clear_lines(self) -> int:
+        completed = [index for index, row in enumerate(self.grid) if all(row)]
+        for idx in completed:
+            del self.grid[idx]
+            self.grid.insert(0, [0 for _ in range(self.width)])
+        cleared = len(completed)
+        if cleared:
+            self.lines_cleared += cleared
+            score_table = {1: 100, 2: 300, 3: 500, 4: 800}
+            self.score += score_table.get(cleared, cleared * 100)
+        return cleared
+
+    def add_garbage_lines(self, num_lines: int):
+        for _ in range(num_lines):
+            self.grid.pop(0)
+            garbage = [1 for _ in range(self.width)]
+            hole = random.randint(0, self.width - 1)
+            garbage[hole] = 0
+            self.grid.append(garbage)
+
+    def is_game_over(self) -> bool:
+        return any(self.grid[0])
+
+    def get_height_map(self):
+        heights = []
+        for x in range(self.width):
+            column_height = 0
+            for y in range(self.height):
+                if self.grid[y][x]:
+                    column_height = self.height - y
+                    break
+            heights.append(column_height)
+        return heights
+
+    def get_max_height(self):
+        heights = self.get_height_map()
+        return max(heights) if heights else 0
+
+    def to_string(self) -> str:
+        lines = ["+" + "-" * self.width + "+"]
+        for row in self.grid:
+            line = "|" + "".join("#" if cell else " " for cell in row) + "|"
+            lines.append(line)
+        lines.append("+" + "-" * self.width + "+")
+        return "\n".join(lines)
+
+
+class FigureBank:
+    def __init__(self, initial_count: int = 15):
+        self.bank = {piece: initial_count for piece in TETROMINO_TYPES}
+
+    def get_piece(self, piece_type: str) -> bool:
+        if piece_type not in self.bank:
+            return False
+        if self.bank[piece_type] > 0:
+            self.bank[piece_type] -= 1
+            return True
+        return False
+
+    def is_available(self, piece_type: str) -> bool:
+        return piece_type in self.bank and self.bank[piece_type] > 0
+
+    def get_available_pieces(self):
+        return [piece for piece in TETROMINO_TYPES if self.bank[piece] > 0]
+
+    def is_empty(self) -> bool:
+        return all(count == 0 for count in self.bank.values())
+
+    def get_random_available(self) -> str | None:
+        available = self.get_available_pieces()
+        if available:
+            return random.choice(available)
+        return None
+
+    def get_state(self):
+        return self.bank.copy()
+
+
+class AIAgent:
+    def __init__(self, name: str, strategy: str = "greedy"):
+        self.name = name
+        self.strategy = strategy
+        self.decision_times = []
+
+    def decide_placement(self, board: GameBoard, piece: Tetromino):
+        start_time = time.time()
+        best_position = None
+        best_score = float("-inf")
+        for rotation in range(4):
+            piece_copy = Tetromino(piece.type)
+            for _ in range(rotation):
+                piece_copy.rotate()
+            for x in range(board.width - piece_copy.get_width() + 1):
+                y = 0
+                while y < board.height and board.can_place(piece_copy, x, y):
+                    y += 1
+                y -= 1
+                if y >= 0 and board.can_place(piece_copy, x, y):
+                    score = self._evaluate_position(board, piece_copy, x, y)
+                    if score > best_score:
+                        best_score = score
+                        best_position = (x, y, rotation)
+        decision_time = time.time() - start_time
+        self.decision_times.append(decision_time)
+        if best_position:
+            return best_position
+        return (board.width // 2, 0, 0)
+
+    def _evaluate_position(self, board: GameBoard, piece: Tetromino, x: int, y: int) -> float:
+        test_board = GameBoard(board.width, board.height)
+        test_board.grid = [row[:] for row in board.grid]
+        test_board.place_piece(piece, x, y)
+        max_height = test_board.get_max_height()
+        heights = test_board.get_height_map()
+        bumpiness = sum(abs(heights[i] - heights[i + 1]) for i in range(len(heights) - 1))
+        holes = 0
+        for col_x in range(board.width):
+            found_block = False
+            for row_y in range(board.height):
+                if test_board.grid[row_y][col_x]:
+                    found_block = True
+                elif found_block:
+                    holes += 1
+        if self.strategy == "greedy":
+            score = -max_height * 2 - holes * 5 - bumpiness
+        elif self.strategy == "defensive":
+            score = -max_height * 3 - holes * 10 - bumpiness * 2
+        elif self.strategy == "aggressive":
+            lines_cleared = self._count_potential_lines(test_board)
+            score = lines_cleared * 100 - max_height - holes * 3
+        else:
+            score = -max_height - holes
+        return score
+
+    def _count_potential_lines(self, board: GameBoard) -> int:
+        return sum(1 for row in board.grid if all(row))
+
+    def choose_attack_piece(self, bank: FigureBank):
+        available = bank.get_available_pieces()
+        if not available:
+            return None
+        if self.strategy == "aggressive":
+            difficult = [p for p in ["T", "L", "J"] if p in available]
+            if difficult:
+                return random.choice(difficult)
+        elif self.strategy == "defensive":
+            easy = [p for p in ["I", "O"] if p in available]
+            if easy:
+                return random.choice(easy)
+        return random.choice(available)
+
+
+class Arena:
+    def __init__(self, ai1: AIAgent, ai2: AIAgent, bank: FigureBank, max_turns: int = 360):
+        self.ai1 = ai1
+        self.ai2 = ai2
+        self.board1 = GameBoard()
+        self.board2 = GameBoard()
+        self.bank = bank
+        self.max_turns = max_turns
+        self.turn = 0
+        self.current_piece_ai1 = self._get_next_piece()
+        self.current_piece_ai2 = self._get_next_piece()
+        self.garbage_queue_ai1 = 0
+        self.garbage_queue_ai2 = 0
+
+    def _get_next_piece(self) -> str:
+        piece_type = self.bank.get_random_available()
+        if piece_type:
+            self.bank.get_piece(piece_type)
+            return piece_type
+        return random.choice(TETROMINO_TYPES)
+
+    def play_turn(self, ai: AIAgent, board: GameBoard, piece_type: str):
+        piece = Tetromino(piece_type)
+        x, y, rotations = ai.decide_placement(board, piece)
+        for _ in range(rotations):
+            piece.rotate()
+        if board.can_place(piece, x, y):
+            board.place_piece(piece, x, y)
+        else:
+            board.game_over = True
+            return 0, 0.0, None
+        lines_cleared = board.clear_lines()
+        attack_piece = None
+        if lines_cleared > 0:
+            attack_piece = ai.choose_attack_piece(self.bank)
+        decision_time = ai.decision_times[-1] if ai.decision_times else 0.0
+        return lines_cleared, decision_time, attack_piece
+
+    def _result_state(self, finished: bool, winner: str | None, reason: str):
+        return {
+            "finished": finished,
+            "winner": winner,
+            "reason": reason,
+            "turn": self.turn,
+            "scores": {"ai1": self.board1.score, "ai2": self.board2.score},
+            "lines": {"ai1": self.board1.lines_cleared, "ai2": self.board2.lines_cleared},
+        }
+
+    def _winner_by_score(self) -> str:
+        if self.board1.score == self.board2.score:
+            if self.board1.lines_cleared >= self.board2.lines_cleared:
+                return self.ai1.name
+            return self.ai2.name
+        if self.board1.score > self.board2.score:
+            return self.ai1.name
+        return self.ai2.name
+
+    def step(self):
+        if self.turn >= self.max_turns:
+            winner = self._winner_by_score()
+            return self._result_state(True, winner, "turn_limit")
+        self.turn += 1
+        if self.garbage_queue_ai1:
+            self.board1.add_garbage_lines(self.garbage_queue_ai1)
+            self.garbage_queue_ai1 = 0
+        lines1, _, attack1 = self.play_turn(self.ai1, self.board1, self.current_piece_ai1)
+        if self.board1.game_over or self.board1.is_game_over():
+            return self._result_state(True, self.ai2.name, "ai1_board_overflow")
+        if lines1 > 0:
+            self.garbage_queue_ai2 += lines1
+        if attack1 and self.bank.is_available(attack1):
+            self.current_piece_ai1 = attack1
+            self.bank.get_piece(attack1)
+        else:
+            self.current_piece_ai1 = self._get_next_piece()
+        if self.garbage_queue_ai2:
+            self.board2.add_garbage_lines(self.garbage_queue_ai2)
+            self.garbage_queue_ai2 = 0
+        lines2, _, attack2 = self.play_turn(self.ai2, self.board2, self.current_piece_ai2)
+        if self.board2.game_over or self.board2.is_game_over():
+            return self._result_state(True, self.ai1.name, "ai2_board_overflow")
+        if lines2 > 0:
+            self.garbage_queue_ai1 += lines2
+        if attack2 and self.bank.is_available(attack2):
+            self.current_piece_ai2 = attack2
+            self.bank.get_piece(attack2)
+        else:
+            self.current_piece_ai2 = self._get_next_piece()
+        if self.turn >= self.max_turns:
+            winner = self._winner_by_score()
+            return self._result_state(True, winner, "turn_limit")
+        return self._result_state(False, None, "ongoing")
+
+
+# --- UI helpers --------------------------------------------------------------
+
+def board_text(board: GameBoard) -> str:
+    return board.to_string()
+
+
+def bank_text(bank: FigureBank) -> str:
+    lines = ["FIGURE BANK"]
+    state = bank.get_state()
+    for piece in TETROMINO_TYPES:
+        count = state[piece]
+        lines.append(f"{piece}: {count:02d}")
+    total = sum(state.values())
+    lines.append(f"Total: {total}")
+    return "\n".join(lines)
+
+
+running_match = False
+start_button = document.getElementById("start")
+status_element = document.getElementById("status")
+board1_element = document.getElementById("board1")
+board2_element = document.getElementById("board2")
+bank_element = document.getElementById("bank")
+ai1_name_element = document.getElementById("ai1-name")
+ai2_name_element = document.getElementById("ai2-name")
+speed_slider = document.getElementById("speed")
+speed_value = document.getElementById("speed-value")
+
+
+def update_speed_label(event=None):
+    speed_value.textContent = f"{speed_slider.value} ms"
+
+
+def reset_display():
+    board1_element.textContent = ""
+    board2_element.textContent = ""
+    bank_element.textContent = ""
+
+
+async def run_match(event=None):
+    global running_match
+    if running_match:
+        return
+    running_match = True
+    reset_display()
+    start_button.disabled = True
+    update_speed_label()
+    bank = FigureBank(initial_count=12)
+    ai1 = AIAgent("AI-1", strategy="greedy")
+    ai2 = AIAgent("AI-2", strategy="aggressive")
+    arena = Arena(ai1, ai2, bank, max_turns=320)
+    ai1_name_element.textContent = ai1.name
+    ai2_name_element.textContent = ai2.name
+    status_element.textContent = "Match in progress..."
+    while True:
+        state = arena.step()
+        board1_element.textContent = board_text(arena.board1)
+        board2_element.textContent = board_text(arena.board2)
+        bank_element.textContent = bank_text(arena.bank)
+        status_element.textContent = (
+            f"Turn {state['turn']} | Score {ai1.name}: {state['scores']['ai1']} | "
+            f"Score {ai2.name}: {state['scores']['ai2']}"
+        )
+        if state["finished"]:
+            status_element.textContent += (
+                f" | Winner: {state['winner']} (reason: {state['reason']})"
+            )
+            break
+        delay = max(int(speed_slider.value), 50) / 1000.0
+        await asyncio.sleep(delay)
+    running_match = False
+    start_button.disabled = False
+
+
+start_handler = create_proxy(lambda event: asyncio.ensure_future(run_match(event)))
+speed_handler = create_proxy(update_speed_label)
+start_button.addEventListener("click", start_handler)
+speed_slider.addEventListener("input", speed_handler)
+update_speed_label()
+</py-script>
+</body>
+</html>
