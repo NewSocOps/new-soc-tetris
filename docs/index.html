@@ -106,6 +106,18 @@ canvas {
   box-shadow: 0 0 16px rgba(0, 255, 0, 0.2);
 }
 
+.bank-section {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+}
+
+.bank-section h2 {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
 .view-toggle {
   margin-bottom: 12px;
 }
@@ -268,7 +280,12 @@ table tr:hover {
     <pre id="board2"></pre>
   </div>
 </div>
-<pre id="bank"></pre>
+
+<div class="bank-section">
+  <h2>🎲 Figure Bank</h2>
+  <canvas id="bank-canvas" width="420" height="150" style="display: none;"></canvas>
+  <pre id="bank"></pre>
+</div>
 
 <div class="stats-section" id="stats-section" style="display: none;">
   <h2>📊 Match Statistics</h2>
@@ -668,6 +685,45 @@ def draw_board_canvas(ctx, board: GameBoard):
                 ctx.strokeRect(x * cell_size, y * cell_size, cell_size, cell_size)
 
 
+def draw_bank_canvas(ctx, bank: FigureBank):
+    """Draw the figure bank on a canvas."""
+    ctx.fillStyle = "#000000"
+    ctx.fillRect(0, 0, 420, 150)
+    
+    state = bank.get_state()
+    pieces = list(TETROMINO_TYPES)
+    
+    bar_width = 50
+    bar_gap = 10
+    max_height = 100
+    max_count = 15
+    y_baseline = 130
+    
+    for i, piece_type in enumerate(pieces):
+        x = 10 + i * (bar_width + bar_gap)
+        count = state[piece_type]
+        bar_height = (count / max_count) * max_height if max_count > 0 else 0
+        
+        # Draw bar
+        ctx.fillStyle = "#39ff14" if count > 5 else "#ff9500" if count > 2 else "#ff3b30"
+        ctx.fillRect(x, y_baseline - bar_height, bar_width, bar_height)
+        
+        # Draw border
+        ctx.strokeStyle = "#2a2a2a"
+        ctx.strokeRect(x, y_baseline - bar_height, bar_width, bar_height)
+        
+        # Draw piece type label
+        ctx.fillStyle = "#e2e2e2"
+        ctx.font = "bold 14px monospace"
+        ctx.textAlign = "center"
+        ctx.fillText(piece_type, x + bar_width / 2, y_baseline + 15)
+        
+        # Draw count
+        ctx.fillStyle = "#aaa"
+        ctx.font = "12px monospace"
+        ctx.fillText(str(count), x + bar_width / 2, y_baseline - bar_height - 5)
+
+
 # --- UI State Management -----------------------------------------------------
 
 class MatchController:
@@ -689,10 +745,11 @@ class MatchController:
             if use_canvas_view:
                 draw_board_canvas(ctx1, self.arena.board1)
                 draw_board_canvas(ctx2, self.arena.board2)
+                draw_bank_canvas(ctx_bank, self.arena.bank)
             else:
                 board1_element.textContent = board_text(self.arena.board1)
                 board2_element.textContent = board_text(self.arena.board2)
-            bank_element.textContent = bank_text(self.arena.bank)
+                bank_element.textContent = bank_text(self.arena.bank)
         else:
             board1_element.textContent = ""
             board2_element.textContent = ""
@@ -793,8 +850,10 @@ ai1_strategy_select = document.getElementById("ai1-strategy")
 ai2_strategy_select = document.getElementById("ai2-strategy")
 canvas1 = document.getElementById("canvas1")
 canvas2 = document.getElementById("canvas2")
+bank_canvas = document.getElementById("bank-canvas")
 ctx1 = canvas1.getContext("2d")
 ctx2 = canvas2.getContext("2d")
+ctx_bank = bank_canvas.getContext("2d")
 view_ascii_button = document.getElementById("view-ascii")
 view_canvas_button = document.getElementById("view-canvas")
 stats_section = document.getElementById("stats-section")
@@ -1031,8 +1090,10 @@ def switch_to_ascii(event=None):
     use_canvas_view = False
     canvas1.style.display = "none"
     canvas2.style.display = "none"
+    bank_canvas.style.display = "none"
     board1.style.display = "block"
     board2.style.display = "block"
+    bank.style.display = "block"
     view_ascii_button.classList.add("secondary")
     view_canvas_button.classList.remove("secondary")
     if controller.arena:
@@ -1044,8 +1105,10 @@ def switch_to_canvas(event=None):
     use_canvas_view = True
     canvas1.style.display = "block"
     canvas2.style.display = "block"
+    bank_canvas.style.display = "block"
     board1.style.display = "none"
     board2.style.display = "none"
+    bank.style.display = "none"
     view_ascii_button.classList.remove("secondary")
     view_canvas_button.classList.add("secondary")
     if controller.arena:
