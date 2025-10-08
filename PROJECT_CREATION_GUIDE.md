@@ -744,5 +744,5 @@ Good luck, and happy building! 🚀
 
 **Document Version:** 1.0  
 **Last Updated:** 2025-10-08  
-**Authors:** Nikolay (Human) & Claude 3.7 Sonnet (AI)  
+**Authors:** Nikolay (Human) & Claude Sonnet 4.5 (AI)  
 **License:** Apache-2.0 OR MIT

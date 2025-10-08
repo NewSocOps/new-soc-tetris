@@ -251,7 +251,7 @@ SPDX-License-Identifier: `Apache-2.0 OR MIT`
 
 **Created through collaboration:**
 - **Nikolay (NewSocOps)** — Project vision, testing, feedback
-- **Claude 3.7 Sonnet (via GitHub Copilot)** — Implementation, architecture, documentation
+- **Claude Sonnet 4.5 (via GitHub Copilot)** — Implementation, architecture, documentation
 - **Anthropic** — AI foundation
 - **GitHub** — Hosting, CI/CD, Copilot integration
 
