@@ -263,7 +263,7 @@ table tr:hover {
   <input id="speed" type="range" min="50" max="600" value="150" step="10" />
   <span id="speed-value">150 ms</span>
 </div>
-<div id="status">Press "Start Match" to begin the simulation.</div>
+<div id="status">Press "Start Match" to begin the simulation. <span style="color: #808080; font-weight: bold;">Gray blocks (█)</span> are garbage lines sent by clearing multiple lines.</div>
 <div class="view-toggle">
   <button id="view-ascii" class="secondary">📝 ASCII View</button>
   <button id="view-canvas">🎨 Canvas View</button>
@@ -455,9 +455,22 @@ class GameBoard:
         return max(heights) if heights else 0
 
     def to_string(self) -> str:
+        """Generate ASCII board with HTML color styling."""
         lines = ["+" + "-" * self.width + "+"]
         for row in self.grid:
-            line = "|" + "".join("#" if cell else " " for cell in row) + "|"
+            line = "|"
+            for cell in row:
+                if cell:
+                    if cell == 'G':
+                        # Gray for garbage
+                        line += f'<span style="color: #808080; font-weight: bold;">█</span>'
+                    else:
+                        # Colored block for each piece type
+                        color = COLORS.get(cell, "#39ff14")
+                        line += f'<span style="color: {color}; font-weight: bold;">█</span>'
+                else:
+                    line += " "
+            line += "|"
             lines.append(line)
         lines.append("+" + "-" * self.width + "+")
         return "\n".join(lines)
@@ -669,13 +682,24 @@ def board_text(board: GameBoard) -> str:
 
 
 def bank_text(bank: FigureBank) -> str:
-    lines = ["FIGURE BANK"]
+    """Generate ASCII bank display with colored piece indicators."""
+    lines = ["<span style='color: #39ff14; font-weight: bold;'>🎲 FIGURE BANK</span>"]
     state = bank.get_state()
     for piece in TETROMINO_TYPES:
         count = state[piece]
-        lines.append(f"{piece}: {count:02d}")
+        color = COLORS.get(piece, "#39ff14")
+        # Color the piece letter in its signature color
+        colored_piece = f'<span style="color: {color}; font-weight: bold;">{piece}</span>'
+        # Dim the count if low
+        if count <= 2:
+            count_style = 'color: #ff3b30; font-weight: bold;'  # Red for critical
+        elif count <= 5:
+            count_style = 'color: #ff9500; font-weight: bold;'  # Orange for low
+        else:
+            count_style = 'color: #e2e2e2;'  # Normal
+        lines.append(f"{colored_piece}: <span style='{count_style}'>{count:02d}</span>")
     total = sum(state.values())
-    lines.append(f"Total: {total}")
+    lines.append(f"<span style='color: #39ff14;'>Total: {total}</span>")
     return "\n".join(lines)
 
 
@@ -783,13 +807,14 @@ class MatchController:
                 draw_board_canvas(ctx2, self.arena.board2)
                 draw_bank_canvas(ctx_bank, self.arena.bank)
             else:
-                board1_element.textContent = board_text(self.arena.board1)
-                board2_element.textContent = board_text(self.arena.board2)
-                bank_element.textContent = bank_text(self.arena.bank)
+                # Use innerHTML to render HTML color tags
+                board1_element.innerHTML = board_text(self.arena.board1)
+                board2_element.innerHTML = board_text(self.arena.board2)
+                bank_element.innerHTML = bank_text(self.arena.bank)
         else:
-            board1_element.textContent = ""
-            board2_element.textContent = ""
-            bank_element.textContent = ""
+            board1_element.innerHTML = ""
+            board2_element.innerHTML = ""
+            bank_element.innerHTML = ""
         
     def update_status(self, state):
         ai1_name = self.arena.ai1.name if self.arena else "AI-1"
