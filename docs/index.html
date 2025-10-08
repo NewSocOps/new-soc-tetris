@@ -1093,11 +1093,12 @@ def format_thinking(ai_name, thinking_data):
         
         prefix = "✓" if is_best else f"{i}."
         color = "#39ff14" if is_best else "#e2e2e2"
+        font_weight = "bold" if is_best else "normal"
         
         placement_desc = f'x={eval_data["x"]}, rot={eval_data["rotation"]}'
         
         lines.append(
-            f'<span style="color: {color}; font-weight: {"bold" if is_best else "normal"};">'
+            f'<span style="color: {color}; font-weight: {font_weight};">'
             f'{prefix} {placement_desc}: score={score:.1f} '
             f'(h={m["height"]}, holes={m["holes"]}, bump={m["bumpiness"]}, lines={m["lines"]})'
             f'</span>'
