@@ -262,8 +262,18 @@ table tr:hover {
   <label for="speed">Speed:</label>
   <input id="speed" type="range" min="50" max="600" value="150" step="10" />
   <span id="speed-value">150 ms</span>
+  <label style="margin-left: 16px;">
+    <input type="checkbox" id="show-thinking" checked /> 🧠 Show AI Thinking
+  </label>
 </div>
 <div id="status">Press "Start Match" to begin the simulation. <span style="color: #808080; font-weight: bold;">Gray blocks (█)</span> are garbage lines sent by clearing multiple lines.</div>
+
+<!-- AI Thinking Display -->
+<div id="thinking-section" style="margin: 20px 0; padding: 16px; background-color: #1a1a1a; border-radius: 8px; border-left: 4px solid #1e88e5; display: none;">
+  <h3 style="margin: 0 0 12px 0; color: #39ff14; font-size: 1rem;">💭 AI Thought Process</h3>
+  <div id="thinking-content" style="font-family: 'Courier New', monospace; font-size: 0.85rem; line-height: 1.6; color: #e2e2e2;"></div>
+</div>
+
 <div class="view-toggle">
   <button id="view-ascii" class="secondary">📝 ASCII View</button>
   <button id="view-canvas">🎨 Canvas View</button>
@@ -513,10 +523,12 @@ class AIAgent:
         self.strategy = strategy
         self.decision_times = []
 
-    def decide_placement(self, board: GameBoard, piece: Tetromino):
+    def decide_placement(self, board: GameBoard, piece: Tetromino, verbose=False):
         start_time = time.time()
         best_position = None
         best_score = float("-inf")
+        all_evaluations = []  # Store all considered positions
+        
         for rotation in range(4):
             piece_copy = Tetromino(piece.type)
             for _ in range(rotation):
@@ -527,22 +539,40 @@ class AIAgent:
                     y += 1
                 y -= 1
                 if y >= 0 and board.can_place(piece_copy, x, y):
-                    score = self._evaluate_position(board, piece_copy, x, y)
+                    score, metrics = self._evaluate_position(board, piece_copy, x, y, return_metrics=True)
+                    all_evaluations.append({
+                        "x": x, "y": y, "rotation": rotation,
+                        "score": score, "metrics": metrics
+                    })
                     if score > best_score:
                         best_score = score
                         best_position = (x, y, rotation)
+        
         decision_time = time.time() - start_time
         self.decision_times.append(decision_time)
+        
+        # Store thinking process for display
+        if verbose and all_evaluations:
+            self.last_thinking = {
+                "piece": piece.type,
+                "evaluations": sorted(all_evaluations, key=lambda e: e["score"], reverse=True)[:5],
+                "best": best_position,
+                "best_score": best_score,
+                "total_options": len(all_evaluations),
+                "decision_time": decision_time
+            }
+        
         if best_position:
             return best_position
         return (board.width // 2, 0, 0)
 
-    def _evaluate_position(self, board: GameBoard, piece: Tetromino, x: int, y: int) -> float:
+    def _evaluate_position(self, board: GameBoard, piece: Tetromino, x: int, y: int, return_metrics=False):
         test_board = GameBoard(board.width, board.height)
         test_board.grid = [row[:] for row in board.grid]
         test_board.place_piece(piece, x, y)
         max_height = test_board.get_max_height()
         heights = test_board.get_height_map()
+        aggregate_height = sum(heights)
         bumpiness = sum(abs(heights[i] - heights[i + 1]) for i in range(len(heights) - 1))
         holes = 0
         for col_x in range(board.width):
@@ -552,15 +582,24 @@ class AIAgent:
                     found_block = True
                 elif found_block:
                     holes += 1
+        lines_cleared = self._count_potential_lines(test_board)
+        
         if self.strategy == "greedy":
-            score = -max_height * 2 - holes * 5 - bumpiness
+            score = -aggregate_height * 4.0 - holes * 7.0 - bumpiness * 3.0 + lines_cleared * 2.0
         elif self.strategy == "defensive":
-            score = -max_height * 3 - holes * 10 - bumpiness * 2
+            score = -aggregate_height * 3.0 - holes * 10.0 - bumpiness * 6.0 + lines_cleared * 1.5
         elif self.strategy == "aggressive":
-            lines_cleared = self._count_potential_lines(test_board)
-            score = lines_cleared * 100 - max_height - holes * 3
+            score = aggregate_height * 3.0 - holes * 5.0 + bumpiness * 0.5 + lines_cleared * 5.0
         else:
-            score = -max_height - holes
+            score = -aggregate_height - holes
+        
+        if return_metrics:
+            return score, {
+                "height": aggregate_height,
+                "holes": holes,
+                "bumpiness": bumpiness,
+                "lines": lines_cleared
+            }
         return score
 
     def _count_potential_lines(self, board: GameBoard) -> int:
@@ -602,9 +641,9 @@ class Arena:
             return piece_type
         return random.choice(TETROMINO_TYPES)
 
-    def play_turn(self, ai: AIAgent, board: GameBoard, piece_type: str):
+    def play_turn(self, ai: AIAgent, board: GameBoard, piece_type: str, verbose=False):
         piece = Tetromino(piece_type)
-        x, y, rotations = ai.decide_placement(board, piece)
+        x, y, rotations = ai.decide_placement(board, piece, verbose=verbose)
         for _ in range(rotations):
             piece.rotate()
         if board.can_place(piece, x, y):
@@ -638,15 +677,16 @@ class Arena:
             return self.ai1.name
         return self.ai2.name
 
-    def step(self):
+    def step(self, verbose=False):
         if self.turn >= self.max_turns:
             winner = self._winner_by_score()
             return self._result_state(True, winner, "turn_limit")
         self.turn += 1
+        self.current_thinking_ai = self.ai1.name  # Track who's thinking
         if self.garbage_queue_ai1:
             self.board1.add_garbage_lines(self.garbage_queue_ai1)
             self.garbage_queue_ai1 = 0
-        lines1, _, attack1 = self.play_turn(self.ai1, self.board1, self.current_piece_ai1)
+        lines1, _, attack1 = self.play_turn(self.ai1, self.board1, self.current_piece_ai1, verbose=verbose)
         if self.board1.game_over or self.board1.is_game_over():
             return self._result_state(True, self.ai2.name, "ai1_board_overflow")
         if lines1 > 0:
@@ -656,10 +696,11 @@ class Arena:
             self.bank.get_piece(attack1)
         else:
             self.current_piece_ai1 = self._get_next_piece()
+        self.current_thinking_ai = self.ai2.name  # Switch to AI-2
         if self.garbage_queue_ai2:
             self.board2.add_garbage_lines(self.garbage_queue_ai2)
             self.garbage_queue_ai2 = 0
-        lines2, _, attack2 = self.play_turn(self.ai2, self.board2, self.current_piece_ai2)
+        lines2, _, attack2 = self.play_turn(self.ai2, self.board2, self.current_piece_ai2, verbose=verbose)
         if self.board2.game_over or self.board2.is_game_over():
             return self._result_state(True, self.ai1.name, "ai2_board_overflow")
         if lines2 > 0:
@@ -919,12 +960,69 @@ view_ascii_button = document.getElementById("view-ascii")
 view_canvas_button = document.getElementById("view-canvas")
 stats_section = document.getElementById("stats-section")
 stats_grid = document.getElementById("stats-grid")
+thinking_section = document.getElementById("thinking-section")
+thinking_content = document.getElementById("thinking-content")
+show_thinking_checkbox = document.getElementById("show-thinking")
 
 use_canvas_view = False
 
 
 def update_speed_label(event=None):
     speed_value.textContent = f"{speed_slider.value} ms"
+
+
+def format_thinking(ai_name, thinking_data):
+    """Format AI thinking process into human-readable text."""
+    if not thinking_data:
+        return ""
+    
+    piece_color = COLORS.get(thinking_data["piece"], "#39ff14")
+    lines = [
+        f'<span style="color: {piece_color}; font-weight: bold; font-size: 1.1rem;">{ai_name}</span> received piece <span style="color: {piece_color}; font-weight: bold;">{thinking_data["piece"]}</span>',
+        f'<span style="color: #888;">Evaluated {thinking_data["total_options"]} possible placements in {thinking_data["decision_time"]*1000:.1f}ms</span>',
+        "",
+        '<span style="color: #1e88e5; font-weight: bold;">🏆 Top 5 Placements Considered:</span>'
+    ]
+    
+    for i, eval_data in enumerate(thinking_data["evaluations"][:5], 1):
+        m = eval_data["metrics"]
+        score = eval_data["score"]
+        is_best = (eval_data["x"] == thinking_data["best"][0] and 
+                   eval_data["rotation"] == thinking_data["best"][2])
+        
+        prefix = "✓" if is_best else f"{i}."
+        color = "#39ff14" if is_best else "#e2e2e2"
+        
+        placement_desc = f'x={eval_data["x"]}, rot={eval_data["rotation"]}'
+        
+        lines.append(
+            f'<span style="color: {color}; font-weight: {"bold" if is_best else "normal"};">'
+            f'{prefix} {placement_desc}: score={score:.1f} '
+            f'(h={m["height"]}, holes={m["holes"]}, bump={m["bumpiness"]}, lines={m["lines"]})'
+            f'</span>'
+        )
+    
+    lines.append("")
+    lines.append(
+        f'<span style="color: #39ff14; font-weight: bold;">➤ CHOSEN: '
+        f'x={thinking_data["best"][0]}, rotation={thinking_data["best"][2]} '
+        f'(score: {thinking_data["best_score"]:.1f})</span>'
+    )
+    
+    return "<br>".join(lines)
+
+
+def display_thinking(ai, ai_name):
+    """Display AI's thinking process if enabled."""
+    if not show_thinking_checkbox.checked:
+        thinking_section.style.display = "none"
+        return
+    
+    if hasattr(ai, "last_thinking") and ai.last_thinking:
+        thinking_section.style.display = "block"
+        thinking_content.innerHTML = format_thinking(ai_name, ai.last_thinking)
+    else:
+        thinking_section.style.display = "none"
 
 
 async def run_match(event=None):
@@ -950,16 +1048,32 @@ async def run_match(event=None):
         if controller.is_paused:
             await asyncio.sleep(0.1)
             continue
-            
-        state = controller.arena.step()
+        
+        # Show thinking process if enabled
+        show_thinking = show_thinking_checkbox.checked
+        
+        # Execute step with verbose mode
+        state = controller.arena.step(verbose=show_thinking)
+        
+        # Display AI-1's thinking
+        if show_thinking:
+            display_thinking(controller.arena.ai1, controller.arena.ai1.name)
+            await asyncio.sleep(max(int(speed_slider.value), 50) / 1000.0)
+        
         controller.update_ui()
         controller.update_status(state)
         controller.collect_stats(state)
+        
+        # Display AI-2's thinking
+        if show_thinking and not state["finished"]:
+            display_thinking(controller.arena.ai2, controller.arena.ai2.name)
+            await asyncio.sleep(max(int(speed_slider.value), 50) / 1000.0)
         
         if state["finished"]:
             controller.is_running = False
             controller.update_buttons(finished=True)
             controller.display_stats()
+            thinking_section.style.display = "none"
             break
             
         delay = max(int(speed_slider.value), 50) / 1000.0
