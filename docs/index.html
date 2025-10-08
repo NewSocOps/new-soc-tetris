@@ -268,6 +268,16 @@ table tr:hover {
 </div>
 <div id="status">Press "Start Match" to begin the simulation. <span style="color: #808080; font-weight: bold;">Gray blocks (█)</span> are garbage lines sent by clearing multiple lines.</div>
 
+<!-- Live Commentary Display -->
+<div id="commentary-section" style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #1a1a1a 0%, #2a1a1a 100%); border-radius: 8px; border-left: 4px solid #f0a000; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+  <h3 style="margin: 0 0 16px 0; color: #f0a000; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
+    🎙️ <span id="commentator-name">Sports Commentator</span>
+  </h3>
+  <div id="commentary-feed" style="max-height: 120px; overflow-y: auto; font-family: 'Arial', sans-serif; font-size: 0.95rem; line-height: 1.8; color: #e2e2e2;">
+    <div style="color: #888; font-style: italic;">Waiting for match to start...</div>
+  </div>
+</div>
+
 <!-- AI Thinking Display -->
 <div id="thinking-section" style="margin: 20px 0; padding: 16px; background-color: #1a1a1a; border-radius: 8px; border-left: 4px solid #1e88e5; display: none;">
   <h3 style="margin: 0 0 12px 0; color: #39ff14; font-size: 1rem;">💭 AI Thought Process</h3>
@@ -680,15 +690,32 @@ class Arena:
     def step(self, verbose=False):
         if self.turn >= self.max_turns:
             winner = self._winner_by_score()
-            return self._result_state(True, winner, "turn_limit")
+            result = self._result_state(True, winner, "turn_limit")
+            result["move_data"] = None
+            return result
+        
         self.turn += 1
+        move_data = {"ai1": {}, "ai2": {}}
+        
         self.current_thinking_ai = self.ai1.name  # Track who's thinking
         if self.garbage_queue_ai1:
             self.board1.add_garbage_lines(self.garbage_queue_ai1)
             self.garbage_queue_ai1 = 0
+        
+        prev_piece1 = self.current_piece_ai1
         lines1, _, attack1 = self.play_turn(self.ai1, self.board1, self.current_piece_ai1, verbose=verbose)
+        move_data["ai1"] = {
+            "piece": prev_piece1,
+            "lines": lines1,
+            "attack": attack1,
+            "board": self.board1
+        }
+        
         if self.board1.game_over or self.board1.is_game_over():
-            return self._result_state(True, self.ai2.name, "ai1_board_overflow")
+            result = self._result_state(True, self.ai2.name, "ai1_board_overflow")
+            result["move_data"] = move_data
+            return result
+        
         if lines1 > 0:
             self.garbage_queue_ai2 += lines1
         if attack1 and self.bank.is_available(attack1):
@@ -696,13 +723,26 @@ class Arena:
             self.bank.get_piece(attack1)
         else:
             self.current_piece_ai1 = self._get_next_piece()
+        
         self.current_thinking_ai = self.ai2.name  # Switch to AI-2
         if self.garbage_queue_ai2:
             self.board2.add_garbage_lines(self.garbage_queue_ai2)
             self.garbage_queue_ai2 = 0
+        
+        prev_piece2 = self.current_piece_ai2
         lines2, _, attack2 = self.play_turn(self.ai2, self.board2, self.current_piece_ai2, verbose=verbose)
+        move_data["ai2"] = {
+            "piece": prev_piece2,
+            "lines": lines2,
+            "attack": attack2,
+            "board": self.board2
+        }
+        
         if self.board2.game_over or self.board2.is_game_over():
-            return self._result_state(True, self.ai1.name, "ai2_board_overflow")
+            result = self._result_state(True, self.ai1.name, "ai2_board_overflow")
+            result["move_data"] = move_data
+            return result
+        
         if lines2 > 0:
             self.garbage_queue_ai1 += lines2
         if attack2 and self.bank.is_available(attack2):
@@ -710,10 +750,16 @@ class Arena:
             self.bank.get_piece(attack2)
         else:
             self.current_piece_ai2 = self._get_next_piece()
+        
         if self.turn >= self.max_turns:
             winner = self._winner_by_score()
-            return self._result_state(True, winner, "turn_limit")
-        return self._result_state(False, None, "ongoing")
+            result = self._result_state(True, winner, "turn_limit")
+            result["move_data"] = move_data
+            return result
+        
+        result = self._result_state(False, None, "ongoing")
+        result["move_data"] = move_data
+        return result
 
 
 # --- UI helpers --------------------------------------------------------------
@@ -963,6 +1009,7 @@ stats_grid = document.getElementById("stats-grid")
 thinking_section = document.getElementById("thinking-section")
 thinking_content = document.getElementById("thinking-content")
 show_thinking_checkbox = document.getElementById("show-thinking")
+commentary_feed = document.getElementById("commentary-feed")
 
 use_canvas_view = False
 
@@ -1025,6 +1072,152 @@ def display_thinking(ai, ai_name):
         thinking_section.style.display = "none"
 
 
+# --- Live Commentary System --------------------------------------------------
+
+class Commentator:
+    """Dynamic sports commentator for AI battles."""
+    
+    def __init__(self):
+        self.commentary_log = []
+        self.last_heights = {"ai1": 0, "ai2": 0}
+        self.combo_count = {"ai1": 0, "ai2": 0}
+        self.critical_moments = 0
+        
+    def add_comment(self, text, style="normal"):
+        """Add a commentary line with timestamp and styling."""
+        colors = {
+            "normal": "#e2e2e2",
+            "excited": "#39ff14",
+            "critical": "#ff3b30",
+            "achievement": "#f0a000",
+            "dramatic": "#a000f0"
+        }
+        color = colors.get(style, "#e2e2e2")
+        self.commentary_log.append(f'<div style="color: {color}; margin: 4px 0;">{text}</div>')
+        
+    def clear(self):
+        """Clear commentary log."""
+        self.commentary_log = []
+        self.last_heights = {"ai1": 0, "ai2": 0}
+        self.combo_count = {"ai1": 0, "ai2": 0}
+        self.critical_moments = 0
+        
+    def get_html(self):
+        """Get formatted HTML for display."""
+        return "".join(self.commentary_log[-8:])  # Show last 8 lines
+    
+    def commentate_move(self, ai_name, piece_type, board, lines_cleared, attack_piece):
+        """Generate commentary for a single move."""
+        piece_color = COLORS.get(piece_type, "#39ff14")
+        piece_html = f'<span style="color: {piece_color}; font-weight: bold;">{piece_type}</span>'
+        ai_html = f'<span style="font-weight: bold;">{ai_name}</span>'
+        
+        height = board.get_max_height()
+        ai_key = "ai1" if "AI-1" in ai_name else "ai2"
+        height_change = height - self.last_heights[ai_key]
+        self.last_heights[ai_key] = height
+        
+        # Opening move
+        if self.last_heights[ai_key] < 5:
+            self.add_comment(f"{ai_html} opens with {piece_html}. Conservative start!")
+            return
+        
+        # Tetris (4 lines)!
+        if lines_cleared == 4:
+            self.combo_count[ai_key] += 1
+            self.add_comment(
+                f"🔥 <b>TETRIS!!!</b> {ai_html} clears FOUR LINES with {piece_html}! The crowd goes WILD!",
+                "excited"
+            )
+            if attack_piece:
+                attack_color = COLORS.get(attack_piece, "#39ff14")
+                self.add_comment(
+                    f"💣 And sends <span style='color: {attack_color}; font-weight: bold;'>{attack_piece}</span> as a devastating counter-attack!",
+                    "achievement"
+                )
+            return
+        
+        # Triple clear
+        if lines_cleared == 3:
+            self.add_comment(
+                f"⚡ Triple clear by {ai_html}! {piece_html} placed perfectly!",
+                "achievement"
+            )
+            return
+        
+        # Double clear
+        if lines_cleared == 2:
+            self.combo_count[ai_key] += 1
+            if self.combo_count[ai_key] >= 3:
+                self.add_comment(f"🎯 {ai_html} on a COMBO streak! Double clear!", "excited")
+            else:
+                self.add_comment(f"✓ {ai_html} clears 2 lines with {piece_html}.")
+            return
+        
+        # Single clear
+        if lines_cleared == 1:
+            self.add_comment(f"{ai_html} clears 1 line. Steady progress...")
+            self.combo_count[ai_key] = 0
+            return
+        
+        # Dangerous height
+        if height >= 16:
+            self.critical_moments += 1
+            if height >= 18:
+                self.add_comment(
+                    f"🚨 <b>CRITICAL!</b> {ai_html}'s board at height {height}! One wrong move and it's GAME OVER!",
+                    "critical"
+                )
+            else:
+                self.add_comment(
+                    f"⚠️ {ai_html} in the danger zone! Height: {height}. Can they recover?",
+                    "dramatic"
+                )
+            return
+        
+        # Height building (Aggressive behavior)
+        if height_change > 3:
+            self.add_comment(
+                f"📈 {ai_html} building HIGH! {piece_html} placed at height {height}. Risky strategy!",
+                "dramatic"
+            )
+            return
+        
+        # Safe play (Defensive behavior)
+        if height < 10 and lines_cleared == 0:
+            if random.random() < 0.3:  # Don't spam boring moves
+                self.add_comment(f"{ai_html} playing it safe. {piece_html} carefully positioned.")
+            return
+        
+        # Default move
+        if random.random() < 0.2:  # Occasional neutral commentary
+            self.add_comment(f"{ai_html} places {piece_html}. Height: {height}.")
+    
+    def commentate_match_start(self, ai1_name, ai2_name):
+        """Opening commentary."""
+        self.add_comment("🎙️ <b>Ladies and gentlemen, welcome to the TETRIS ARENA!</b>", "excited")
+        self.add_comment(f"Today's matchup: <b>{ai1_name}</b> versus <b>{ai2_name}</b>!", "normal")
+        self.add_comment("Let the battle... BEGIN! 🔥", "achievement")
+    
+    def commentate_match_end(self, winner, reason, ai1_score, ai2_score):
+        """Closing commentary."""
+        if reason == "ai1_board_overflow":
+            self.add_comment("💥 <b>AI-1's board has COLLAPSED!</b>", "critical")
+        elif reason == "ai2_board_overflow":
+            self.add_comment("💥 <b>AI-2's board has COLLAPSED!</b>", "critical")
+        elif reason == "turn_limit":
+            self.add_comment("⏰ Time's up! Let's see the final scores...", "dramatic")
+        
+        self.add_comment(
+            f"🏆 <b>WINNER: {winner}!</b> Final score: AI-1: {ai1_score} | AI-2: {ai2_score}",
+            "achievement"
+        )
+        self.add_comment("What an INCREDIBLE match! Thanks for watching! 👏", "excited")
+
+
+commentator = Commentator()
+
+
 async def run_match(event=None):
     if controller.is_running:
         return
@@ -1044,6 +1237,11 @@ async def run_match(event=None):
     ai2_name_element.textContent = ai2.name
     status_element.textContent = "Match in progress..."
     
+    # Initialize commentary
+    commentator.clear()
+    commentator.commentate_match_start(ai1.name, ai2.name)
+    commentary_feed.innerHTML = commentator.get_html()
+    
     while controller.is_running:
         if controller.is_paused:
             await asyncio.sleep(0.1)
@@ -1054,6 +1252,31 @@ async def run_match(event=None):
         
         # Execute step with verbose mode
         state = controller.arena.step(verbose=show_thinking)
+        
+        # Generate commentary for both moves
+        if state["move_data"]:
+            move_ai1 = state["move_data"]["ai1"]
+            if move_ai1:
+                commentator.commentate_move(
+                    controller.arena.ai1.name,
+                    move_ai1["piece"],
+                    move_ai1["board"],
+                    move_ai1["lines"],
+                    move_ai1["attack"]
+                )
+            
+            move_ai2 = state["move_data"]["ai2"]
+            if move_ai2:
+                commentator.commentate_move(
+                    controller.arena.ai2.name,
+                    move_ai2["piece"],
+                    move_ai2["board"],
+                    move_ai2["lines"],
+                    move_ai2["attack"]
+                )
+            
+            # Update commentary display
+            commentary_feed.innerHTML = commentator.get_html()
         
         # Display AI-1's thinking
         if show_thinking:
@@ -1070,6 +1293,15 @@ async def run_match(event=None):
             await asyncio.sleep(max(int(speed_slider.value), 50) / 1000.0)
         
         if state["finished"]:
+            # Final commentary
+            commentator.commentate_match_end(
+                state["winner"],
+                state["reason"],
+                state["scores"]["ai1"],
+                state["scores"]["ai2"]
+            )
+            commentary_feed.innerHTML = commentator.get_html()
+            
             controller.is_running = False
             controller.update_buttons(finished=True)
             controller.display_stats()
