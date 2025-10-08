@@ -99,6 +99,22 @@ pre {
   overflow-x: auto;
 }
 
+canvas {
+  border: 2px solid #39ff14;
+  border-radius: 4px;
+  background-color: #000;
+  box-shadow: 0 0 16px rgba(0, 255, 0, 0.2);
+}
+
+.view-toggle {
+  margin-bottom: 12px;
+}
+
+.view-toggle button {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
 #bank {
   margin-top: 24px;
 }
@@ -202,13 +218,19 @@ table tr:hover {
   <span id="speed-value">150 ms</span>
 </div>
 <div id="status">Press "Start Match" to begin the simulation.</div>
+<div class="view-toggle">
+  <button id="view-ascii" class="secondary">📝 ASCII View</button>
+  <button id="view-canvas">🎨 Canvas View</button>
+</div>
 <div class="boards">
   <div class="board">
     <h2 id="ai1-name">AI-1</h2>
+    <canvas id="canvas1" width="200" height="400" style="display: none;"></canvas>
     <pre id="board1"></pre>
   </div>
   <div class="board">
     <h2 id="ai2-name">AI-2</h2>
+    <canvas id="canvas2" width="200" height="400" style="display: none;"></canvas>
     <pre id="board2"></pre>
   </div>
 </div>
@@ -590,6 +612,23 @@ def bank_text(bank: FigureBank) -> str:
     return "\n".join(lines)
 
 
+# --- Canvas Rendering --------------------------------------------------------
+
+def draw_board_canvas(ctx, board: GameBoard):
+    """Draw the game board on a canvas."""
+    cell_size = 20
+    ctx.fillStyle = "#000000"
+    ctx.fillRect(0, 0, 200, 400)
+    
+    for y in range(board.height):
+        for x in range(board.width):
+            if board.grid[y][x]:
+                ctx.fillStyle = "#39ff14"
+                ctx.fillRect(x * cell_size, y * cell_size, cell_size, cell_size)
+                ctx.strokeStyle = "#2a2a2a"
+                ctx.strokeRect(x * cell_size, y * cell_size, cell_size, cell_size)
+
+
 # --- UI State Management -----------------------------------------------------
 
 class MatchController:
@@ -600,9 +639,18 @@ class MatchController:
         self.current_task = None
         
     def update_ui(self):
-        board1_element.textContent = board_text(self.arena.board1) if self.arena else ""
-        board2_element.textContent = board_text(self.arena.board2) if self.arena else ""
-        bank_element.textContent = bank_text(self.arena.bank) if self.arena else ""
+        if self.arena:
+            if use_canvas_view:
+                draw_board_canvas(ctx1, self.arena.board1)
+                draw_board_canvas(ctx2, self.arena.board2)
+            else:
+                board1_element.textContent = board_text(self.arena.board1)
+                board2_element.textContent = board_text(self.arena.board2)
+            bank_element.textContent = bank_text(self.arena.bank)
+        else:
+            board1_element.textContent = ""
+            board2_element.textContent = ""
+            bank_element.textContent = ""
         
     def update_status(self, state):
         ai1_name = self.arena.ai1.name if self.arena else "AI-1"
@@ -645,6 +693,14 @@ speed_slider = document.getElementById("speed")
 speed_value = document.getElementById("speed-value")
 ai1_strategy_select = document.getElementById("ai1-strategy")
 ai2_strategy_select = document.getElementById("ai2-strategy")
+canvas1 = document.getElementById("canvas1")
+canvas2 = document.getElementById("canvas2")
+ctx1 = canvas1.getContext("2d")
+ctx2 = canvas2.getContext("2d")
+view_ascii_button = document.getElementById("view-ascii")
+view_canvas_button = document.getElementById("view-canvas")
+
+use_canvas_view = False
 
 
 def update_speed_label(event=None):
@@ -856,6 +912,40 @@ tournament_handler = create_proxy(lambda e: asyncio.ensure_future(run_tournament
 clear_handler = create_proxy(clear_tournament_results)
 start_tournament_button.addEventListener("click", tournament_handler)
 clear_tournament_button.addEventListener("click", clear_handler)
+
+
+# --- View Toggle -------------------------------------------------------------
+
+def switch_to_ascii(event=None):
+    global use_canvas_view
+    use_canvas_view = False
+    canvas1.style.display = "none"
+    canvas2.style.display = "none"
+    board1.style.display = "block"
+    board2.style.display = "block"
+    view_ascii_button.classList.add("secondary")
+    view_canvas_button.classList.remove("secondary")
+    if controller.arena:
+        controller.update_ui()
+
+
+def switch_to_canvas(event=None):
+    global use_canvas_view
+    use_canvas_view = True
+    canvas1.style.display = "block"
+    canvas2.style.display = "block"
+    board1.style.display = "none"
+    board2.style.display = "none"
+    view_ascii_button.classList.remove("secondary")
+    view_canvas_button.classList.add("secondary")
+    if controller.arena:
+        controller.update_ui()
+
+
+ascii_handler = create_proxy(switch_to_ascii)
+canvas_handler = create_proxy(switch_to_canvas)
+view_ascii_button.addEventListener("click", ascii_handler)
+view_canvas_button.addEventListener("click", canvas_handler)
 </py-script>
 </body>
 </html>
