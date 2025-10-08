@@ -173,6 +173,24 @@ table tr:hover {
 </head>
 <body>
 <h1>AI vs AI Tetris (PyScript)</h1>
+<div style="display: flex; gap: 32px; margin-bottom: 16px; flex-wrap: wrap;">
+  <div>
+    <label style="display: block; margin-bottom: 4px; font-weight: 600;">AI-1 Strategy:</label>
+    <select id="ai1-strategy" style="padding: 6px 12px; background-color: #2a2a2a; color: #e2e2e2; border: 1px solid #444; border-radius: 4px;">
+      <option value="greedy">Greedy (Balanced)</option>
+      <option value="aggressive">Aggressive (Line Clears)</option>
+      <option value="defensive">Defensive (Safe Play)</option>
+    </select>
+  </div>
+  <div>
+    <label style="display: block; margin-bottom: 4px; font-weight: 600;">AI-2 Strategy:</label>
+    <select id="ai2-strategy" style="padding: 6px 12px; background-color: #2a2a2a; color: #e2e2e2; border: 1px solid #444; border-radius: 4px;">
+      <option value="greedy">Greedy (Balanced)</option>
+      <option value="aggressive" selected>Aggressive (Line Clears)</option>
+      <option value="defensive">Defensive (Safe Play)</option>
+    </select>
+  </div>
+</div>
 <div id="controls">
   <button id="start">▶️ Start Match</button>
   <button id="pause" disabled>⏸️ Pause</button>
@@ -625,6 +643,8 @@ ai1_name_element = document.getElementById("ai1-name")
 ai2_name_element = document.getElementById("ai2-name")
 speed_slider = document.getElementById("speed")
 speed_value = document.getElementById("speed-value")
+ai1_strategy_select = document.getElementById("ai1-strategy")
+ai2_strategy_select = document.getElementById("ai2-strategy")
 
 
 def update_speed_label(event=None):
@@ -638,9 +658,12 @@ async def run_match(event=None):
     controller.is_paused = False
     controller.update_buttons()
     
+    ai1_strategy = ai1_strategy_select.value
+    ai2_strategy = ai2_strategy_select.value
+    
     bank = FigureBank(initial_count=12)
-    ai1 = AIAgent("AI-1", strategy="greedy")
-    ai2 = AIAgent("AI-2", strategy="aggressive")
+    ai1 = AIAgent(f"AI-1 ({ai1_strategy.capitalize()})", strategy=ai1_strategy)
+    ai2 = AIAgent(f"AI-2 ({ai2_strategy.capitalize()})", strategy=ai2_strategy)
     controller.arena = Arena(ai1, ai2, bank, max_turns=320)
     
     ai1_name_element.textContent = ai1.name
@@ -740,10 +763,13 @@ async def run_tournament(event=None):
     start_button.disabled = True
     status_element.textContent = f"Running tournament: 0/{num_matches} matches completed..."
     
+    ai1_strategy = ai1_strategy_select.value
+    ai2_strategy = ai2_strategy_select.value
+    
     for match_num in range(1, num_matches + 1):
         bank = FigureBank(initial_count=12)
-        ai1 = AIAgent("AI-1", strategy="greedy")
-        ai2 = AIAgent("AI-2", strategy="aggressive")
+        ai1 = AIAgent(f"AI-1 ({ai1_strategy.capitalize()})", strategy=ai1_strategy)
+        ai2 = AIAgent(f"AI-2 ({ai2_strategy.capitalize()})", strategy=ai2_strategy)
         arena = Arena(ai1, ai2, bank, max_turns=320)
         
         state = None
