@@ -259,6 +259,8 @@ table tr:hover {
   <button id="step" disabled>⏭️ Step</button>
   <button id="restart" class="secondary" disabled>🔄 Restart</button>
   <button id="export-replay" class="secondary" disabled>💾 Export Replay</button>
+  <button id="export-commentary" class="secondary" disabled>🎙️ Export Commentary</button>
+  <button id="export-highlights" class="secondary" disabled>⭐ Export Highlights</button>
   <label for="speed">Speed:</label>
   <input id="speed" type="range" min="50" max="600" value="150" step="10" />
   <span id="speed-value">150 ms</span>
@@ -310,6 +312,58 @@ table tr:hover {
 <div class="stats-section" id="stats-section" style="display: none;">
   <h2>📊 Match Statistics</h2>
   <div class="stats-grid" id="stats-grid"></div>
+</div>
+
+<!-- Prediction League Section -->
+<div class="tournament-section" style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); border-left: 4px solid #a000f0;">
+  <h2>🎯 Prediction League</h2>
+  <p style="color: #aaa; margin-bottom: 16px;">
+    Make your prediction before the match starts! Track your accuracy and compete for the monthly leaderboard. 
+    <strong style="color: #39ff14;">No money involved</strong> — just bragging rights and community recognition!
+  </p>
+  <div id="prediction-interface" style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
+    <div style="flex: 1;">
+      <h4 style="margin: 0 0 8px 0; color: #1e88e5;">Who will win this match?</h4>
+      <div style="display: flex; gap: 12px;">
+        <button id="predict-ai1" class="secondary" style="flex: 1; padding: 12px; font-size: 1rem;">
+          🤖 <span id="predict-ai1-name">AI-1</span>
+        </button>
+        <button id="predict-ai2" class="secondary" style="flex: 1; padding: 12px; font-size: 1rem;">
+          🤖 <span id="predict-ai2-name">AI-2</span>
+        </button>
+      </div>
+      <div id="prediction-odds" style="margin-top: 8px; font-size: 0.9rem; color: #888;">
+        Historical odds: AI-1: 50% | AI-2: 50% (based on 0 past matches)
+      </div>
+    </div>
+    <div style="padding: 16px; background-color: #2a2a2a; border-radius: 8px; min-width: 200px;">
+      <h4 style="margin: 0 0 8px 0; color: #f0a000;">Your Stats</h4>
+      <div style="font-size: 0.9rem;">
+        <div>Predictions: <strong id="user-total-predictions">0</strong></div>
+        <div>Correct: <strong style="color: #39ff14;" id="user-correct-predictions">0</strong></div>
+        <div>Accuracy: <strong style="color: #1e88e5;" id="user-accuracy">0%</strong></div>
+        <div style="margin-top: 8px; font-size: 0.85rem; color: #888;">Current prediction: <span id="current-prediction">None</span></div>
+      </div>
+    </div>
+  </div>
+  <details style="margin-top: 12px;">
+    <summary style="cursor: pointer; color: #1e88e5; font-weight: 600;">📊 How Prediction League Works</summary>
+    <div style="margin-top: 12px; padding: 12px; background-color: #1a1a1a; border-radius: 4px; color: #ccc; line-height: 1.6;">
+      <p><strong>🎮 It's FREE and FUN!</strong></p>
+      <ul style="margin: 8px 0;">
+        <li>Make predictions before each match starts</li>
+        <li>Build your accuracy statistics over time</li>
+        <li>Compete on monthly leaderboards (coming soon!)</li>
+        <li>Learn AI strategies by studying match patterns</li>
+      </ul>
+      <p style="margin-top: 12px; color: #39ff14;"><strong>🏆 Monthly Prizes (Ethical!):</strong></p>
+      <p>Top 3 predictors receive a <strong>$50 GitHub Sponsorship</strong> in their name to an open-source project of their choice! 
+      100% funded by YouTube ad revenue and Patreon supporters.</p>
+      <p style="margin-top: 12px; font-size: 0.85rem; font-style: italic;">
+        No gambling, no money changing hands. Just skill, strategy knowledge, and community support! 💎
+      </p>
+    </div>
+  </details>
 </div>
 
 <div class="tournament-section">
@@ -1302,10 +1356,15 @@ async def run_match(event=None):
             )
             commentary_feed.innerHTML = commentator.get_html()
             
+            # Record prediction result
+            prediction_league.record_result(state["winner"])
+            
             controller.is_running = False
             controller.update_buttons(finished=True)
             controller.display_stats()
             thinking_section.style.display = "none"
+            export_commentary_button.disabled = False
+            export_highlights_button.disabled = False
             break
             
         delay = max(int(speed_slider.value), 50) / 1000.0
@@ -1348,6 +1407,11 @@ def restart_match(event=None):
     board2_element.textContent = ""
     bank_element.textContent = ""
     stats_section.style.display = "none"
+    export_commentary_button.disabled = True
+    export_highlights_button.disabled = True
+    prediction_league.reset_prediction()
+    commentator.clear()
+    commentary_feed.innerHTML = '<div style="color: #888; font-style: italic;">Waiting for match to start...</div>'
     status_element.textContent = "Press 'Start Match' to begin a new simulation."
 
 
@@ -1587,6 +1651,312 @@ def export_replay(event=None):
 
 export_handler = create_proxy(export_replay)
 export_button.addEventListener("click", export_handler)
+
+
+# --- Commentary Export for TTS -----------------------------------------------
+
+def export_commentary_for_tts(event=None):
+    """Export commentary as clean text file for Text-to-Speech services (ElevenLabs, etc.)"""
+    if not commentator.commentary_log:
+        status_element.textContent = "No commentary to export. Run a match first!"
+        return
+    
+    # Remove HTML tags and format for TTS
+    import re
+    clean_lines = []
+    for line in commentator.commentary_log:
+        # Strip HTML tags
+        clean_text = re.sub(r'<[^>]+>', '', line)
+        # Replace HTML entities
+        clean_text = clean_text.replace('&nbsp;', ' ')
+        # Remove emoji and special characters that TTS might struggle with
+        # (Keep basic punctuation for natural pauses)
+        if clean_text.strip():
+            clean_lines.append(clean_text.strip())
+    
+    # Add timing hints for better TTS delivery
+    tts_script = "# AI Tetris Battle - Commentary Script\n"
+    tts_script += "# Use this with ElevenLabs or similar TTS services\n"
+    tts_script += "# Recommended voice: Energetic, Sports Announcer style\n\n"
+    
+    for i, line in enumerate(clean_lines):
+        # Add pause hints after exciting moments
+        if "TETRIS" in line.upper() or "CRITICAL" in line.upper():
+            tts_script += f"{line}...\n"  # Extra pause
+        else:
+            tts_script += f"{line}\n"
+    
+    from js import Blob, URL, document as doc, Date
+    timestamp = Date.new().toISOString()
+    blob = Blob.new([tts_script], {"type": "text/plain"})
+    url = URL.createObjectURL(blob)
+    
+    link = doc.createElement("a")
+    link.href = url
+    link.download = f"commentary_script_{timestamp.replace(':', '-').replace('.', '_')}.txt"
+    link.click()
+    
+    URL.revokeObjectURL(url)
+    status_element.textContent = f"Commentary exported! {len(clean_lines)} lines ready for TTS."
+
+
+# --- Highlights Detection & Export -------------------------------------------
+
+def export_highlights(event=None):
+    """Export timestamp markers for highlight moments (TETRIS, critical situations, etc.)"""
+    if not controller.arena or not controller.match_stats["turns"]:
+        status_element.textContent = "No match data to analyze. Complete a match first!"
+        return
+    
+    highlights = []
+    
+    # Analyze match history for highlight moments
+    for i, turn in enumerate(controller.match_stats["turns"]):
+        ai1_lines = controller.match_stats["ai1_lines"][i] if i < len(controller.match_stats["ai1_lines"]) else 0
+        ai2_lines = controller.match_stats["ai2_lines"][i] if i < len(controller.match_stats["ai2_lines"]) else 0
+        
+        # TETRIS (4 lines)
+        if ai1_lines == 4:
+            highlights.append({
+                "turn": turn,
+                "type": "TETRIS",
+                "player": "AI-1",
+                "description": "AI-1 clears 4 lines (TETRIS!)",
+                "importance": "HIGH"
+            })
+        if ai2_lines == 4:
+            highlights.append({
+                "turn": turn,
+                "type": "TETRIS",
+                "player": "AI-2",
+                "description": "AI-2 clears 4 lines (TETRIS!)",
+                "importance": "HIGH"
+            })
+        
+        # Triple clears
+        if ai1_lines == 3:
+            highlights.append({
+                "turn": turn,
+                "type": "TRIPLE",
+                "player": "AI-1",
+                "description": "AI-1 clears 3 lines",
+                "importance": "MEDIUM"
+            })
+        if ai2_lines == 3:
+            highlights.append({
+                "turn": turn,
+                "type": "TRIPLE",
+                "player": "AI-2",
+                "description": "AI-2 clears 3 lines",
+                "importance": "MEDIUM"
+            })
+    
+    # Add match end as highlight
+    if controller.arena:
+        highlights.append({
+            "turn": controller.arena.turn,
+            "type": "MATCH_END",
+            "player": "BOTH",
+            "description": f"Match ends - Final scores: AI-1: {controller.arena.board1.score}, AI-2: {controller.arena.board2.score}",
+            "importance": "HIGH"
+        })
+    
+    from js import JSON, Blob, URL, document as doc, Date
+    timestamp = Date.new().toISOString()
+    
+    highlights_data = {
+        "version": "1.0",
+        "timestamp": timestamp,
+        "match_info": {
+            "ai1": controller.arena.ai1.name,
+            "ai2": controller.arena.ai2.name,
+        },
+        "total_highlights": len(highlights),
+        "highlights": highlights,
+        "usage": "Use these timestamps to create YouTube chapters or Shorts clips"
+    }
+    
+    json_str = JSON.stringify(highlights_data, None, 2)
+    blob = Blob.new([json_str], {"type": "application/json"})
+    url = URL.createObjectURL(blob)
+    
+    link = doc.createElement("a")
+    link.href = url
+    link.download = f"highlights_{timestamp.replace(':', '-').replace('.', '_')}.json"
+    link.click()
+    
+    URL.revokeObjectURL(url)
+    status_element.textContent = f"Highlights exported! Found {len(highlights)} key moments for editing."
+
+
+# --- Prediction League System ------------------------------------------------
+
+class PredictionLeague:
+    def __init__(self):
+        self.user_stats = {
+            "total": 0,
+            "correct": 0,
+            "predictions": []
+        }
+        self.current_prediction = None
+        self.match_history = []
+        self.load_from_storage()
+    
+    def load_from_storage(self):
+        """Load stats from localStorage if available"""
+        try:
+            from js import localStorage
+            if localStorage.getItem("prediction_stats"):
+                import json
+                data = json.loads(localStorage.getItem("prediction_stats"))
+                self.user_stats = data.get("user_stats", self.user_stats)
+                self.match_history = data.get("match_history", [])
+        except:
+            pass
+    
+    def save_to_storage(self):
+        """Save stats to localStorage"""
+        try:
+            from js import localStorage, JSON
+            import json
+            data = {
+                "user_stats": self.user_stats,
+                "match_history": self.match_history[-50:]  # Keep last 50 matches
+            }
+            localStorage.setItem("prediction_stats", json.dumps(data))
+        except:
+            pass
+    
+    def make_prediction(self, ai_name):
+        """User makes a prediction"""
+        self.current_prediction = ai_name
+        document.getElementById("current-prediction").textContent = ai_name
+        document.getElementById("predict-ai1").disabled = True
+        document.getElementById("predict-ai2").disabled = True
+        status_element.textContent = f"Prediction locked: {ai_name} will win!"
+    
+    def record_result(self, winner):
+        """Record match result and update stats"""
+        if not self.current_prediction:
+            return
+        
+        is_correct = (self.current_prediction == winner)
+        self.user_stats["total"] += 1
+        if is_correct:
+            self.user_stats["correct"] += 1
+        
+        self.user_stats["predictions"].append({
+            "prediction": self.current_prediction,
+            "actual": winner,
+            "correct": is_correct
+        })
+        
+        self.match_history.append({
+            "prediction": self.current_prediction,
+            "winner": winner,
+            "correct": is_correct
+        })
+        
+        self.save_to_storage()
+        self.update_ui()
+        
+        # Reset for next match
+        self.current_prediction = None
+        document.getElementById("current-prediction").textContent = "None"
+        document.getElementById("predict-ai1").disabled = False
+        document.getElementById("predict-ai2").disabled = False
+        
+        # Show result feedback
+        if is_correct:
+            status_element.textContent = "🎉 Correct prediction! Your accuracy improved!"
+        else:
+            status_element.textContent = "❌ Wrong prediction. Better luck next time!"
+    
+    def update_ui(self):
+        """Update UI with current stats"""
+        total = self.user_stats["total"]
+        correct = self.user_stats["correct"]
+        accuracy = (correct / total * 100) if total > 0 else 0
+        
+        document.getElementById("user-total-predictions").textContent = str(total)
+        document.getElementById("user-correct-predictions").textContent = str(correct)
+        document.getElementById("user-accuracy").textContent = f"{accuracy:.1f}%"
+    
+    def calculate_odds(self, ai1_name, ai2_name):
+        """Calculate historical odds based on past matches"""
+        if len(self.match_history) < 3:
+            return "AI-1: 50% | AI-2: 50% (based on 0 past matches)"
+        
+        ai1_wins = sum(1 for m in self.match_history if ai1_name in m["winner"])
+        ai2_wins = sum(1 for m in self.match_history if ai2_name in m["winner"])
+        total = ai1_wins + ai2_wins
+        
+        if total == 0:
+            return f"AI-1: 50% | AI-2: 50% (based on {len(self.match_history)} past matches)"
+        
+        ai1_pct = (ai1_wins / total * 100)
+        ai2_pct = (ai2_wins / total * 100)
+        
+        return f"AI-1: {ai1_pct:.0f}% | AI-2: {ai2_pct:.0f}% (based on {total} past matches)"
+    
+    def reset_prediction(self):
+        """Reset current prediction without recording"""
+        self.current_prediction = None
+        document.getElementById("current-prediction").textContent = "None"
+        document.getElementById("predict-ai1").disabled = False
+        document.getElementById("predict-ai2").disabled = False
+
+
+prediction_league = PredictionLeague()
+prediction_league.update_ui()
+
+
+def predict_ai1(event=None):
+    ai1_name = document.getElementById("ai1-name").textContent or "AI-1"
+    prediction_league.make_prediction(ai1_name)
+
+
+def predict_ai2(event=None):
+    ai2_name = document.getElementById("ai2-name").textContent or "AI-2"
+    prediction_league.make_prediction(ai2_name)
+
+
+# Setup event listeners
+export_commentary_button = document.getElementById("export-commentary")
+export_highlights_button = document.getElementById("export-highlights")
+predict_ai1_button = document.getElementById("predict-ai1")
+predict_ai2_button = document.getElementById("predict-ai2")
+
+export_commentary_handler = create_proxy(export_commentary_for_tts)
+export_highlights_handler = create_proxy(export_highlights)
+predict_ai1_handler = create_proxy(predict_ai1)
+predict_ai2_handler = create_proxy(predict_ai2)
+
+export_commentary_button.addEventListener("click", export_commentary_handler)
+export_highlights_button.addEventListener("click", export_highlights_handler)
+predict_ai1_button.addEventListener("click", predict_ai1_handler)
+predict_ai2_button.addEventListener("click", predict_ai2_handler)
+
+
+# Update prediction odds when strategies change
+def update_prediction_odds():
+    ai1_name = ai1_strategy_select.value
+    ai2_name = ai2_strategy_select.value
+    odds_text = prediction_league.calculate_odds(f"AI-1 ({ai1_name.capitalize()})", f"AI-2 ({ai2_name.capitalize()})")
+    document.getElementById("prediction-odds").textContent = f"Historical odds: {odds_text}"
+    
+    # Update button labels
+    document.getElementById("predict-ai1-name").textContent = f"AI-1 ({ai1_name.capitalize()})"
+    document.getElementById("predict-ai2-name").textContent = f"AI-2 ({ai2_name.capitalize()})"
+
+
+strategy_change_handler = create_proxy(update_prediction_odds)
+ai1_strategy_select.addEventListener("change", strategy_change_handler)
+ai2_strategy_select.addEventListener("change", strategy_change_handler)
+
+# Initialize odds on load
+update_prediction_odds()
+
 </py-script>
 </body>
 </html>
