@@ -12,8 +12,7 @@
 
 ## 🎯 Our Mission
 
-> **"Развлекая — вдохновляем. Играя — обучаем. Побеждая — помогаем."**  
-> *"Entertaining to inspire. Playing to learn. Winning to help."*
+> **"Entertaining to inspire. Playing to learn. Winning to help."**
 
 This project demonstrates that AI can be **fun, educational, and purposeful**. We build engaging experiences that teach algorithmic thinking while creating opportunities to support the next generation of developers.
 
@@ -290,7 +289,7 @@ We believe in the power of technology to **inspire, educate, and elevate**. Thro
 
 Every line of code, every feature, every decision serves one goal: **opening doors for the next generation of innovators**.
 
-> *"Развлекая — вдохновляем. Играя — обучаем. Побеждая — помогаем."*
+> *"Entertaining to inspire. Playing to learn. Winning to help."*
 
 **Join us on this journey.** 🚀✨
 
