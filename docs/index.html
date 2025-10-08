@@ -33,11 +33,32 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 0.95rem;
+}
+
+button:hover:not(:disabled) {
+  background-color: #1976d2;
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+button.secondary {
+  background-color: #424242;
+}
+
+button.secondary:hover:not(:disabled) {
+  background-color: #616161;
+}
+
+button.danger {
+  background-color: #d32f2f;
+}
+
+button.danger:hover:not(:disabled) {
+  background-color: #c62828;
 }
 
 label {
@@ -78,8 +99,57 @@ pre {
   overflow-x: auto;
 }
 
+canvas {
+  border: 2px solid #39ff14;
+  border-radius: 4px;
+  background-color: #000;
+  box-shadow: 0 0 16px rgba(0, 255, 0, 0.2);
+}
+
+.view-toggle {
+  margin-bottom: 12px;
+}
+
+.view-toggle button {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
 #bank {
   margin-top: 24px;
+}
+
+.stats-section {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.stat-card {
+  padding: 12px;
+  background-color: #2a2a2a;
+  border-radius: 4px;
+  border-left: 3px solid #1e88e5;
+}
+
+.stat-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.stat-card .value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #39ff14;
 }
 
 footer {
@@ -87,28 +157,154 @@ footer {
   font-size: 0.8rem;
   color: #8c8c8c;
 }
+
+.tournament-section {
+  margin-top: 32px;
+  padding: 20px;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+}
+
+.tournament-section h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.tournament-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tournament-controls label {
+  font-size: 0.9rem;
+}
+
+.tournament-controls input[type="number"] {
+  width: 60px;
+  padding: 4px 8px;
+  background-color: #2a2a2a;
+  color: #e2e2e2;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+table th, table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+
+table th {
+  background-color: #2a2a2a;
+  font-weight: 600;
+}
+
+table tr:hover {
+  background-color: #252525;
+}
+
+#tournament-results {
+  display: none;
+}
+
+#tournament-results.visible {
+  display: block;
+}
 </style>
 </head>
 <body>
 <h1>AI vs AI Tetris (PyScript)</h1>
+<div style="display: flex; gap: 32px; margin-bottom: 16px; flex-wrap: wrap;">
+  <div>
+    <label style="display: block; margin-bottom: 4px; font-weight: 600;">AI-1 Strategy:</label>
+    <select id="ai1-strategy" style="padding: 6px 12px; background-color: #2a2a2a; color: #e2e2e2; border: 1px solid #444; border-radius: 4px;">
+      <option value="greedy">Greedy (Balanced)</option>
+      <option value="aggressive">Aggressive (Line Clears)</option>
+      <option value="defensive">Defensive (Safe Play)</option>
+    </select>
+  </div>
+  <div>
+    <label style="display: block; margin-bottom: 4px; font-weight: 600;">AI-2 Strategy:</label>
+    <select id="ai2-strategy" style="padding: 6px 12px; background-color: #2a2a2a; color: #e2e2e2; border: 1px solid #444; border-radius: 4px;">
+      <option value="greedy">Greedy (Balanced)</option>
+      <option value="aggressive" selected>Aggressive (Line Clears)</option>
+      <option value="defensive">Defensive (Safe Play)</option>
+    </select>
+  </div>
+</div>
 <div id="controls">
-  <button id="start">Start Match</button>
-  <label for="speed">Delay per frame:</label>
+  <button id="start">▶️ Start Match</button>
+  <button id="pause" disabled>⏸️ Pause</button>
+  <button id="resume" disabled>▶️ Resume</button>
+  <button id="step" disabled>⏭️ Step</button>
+  <button id="restart" class="secondary" disabled>🔄 Restart</button>
+  <button id="export-replay" class="secondary" disabled>💾 Export Replay</button>
+  <label for="speed">Speed:</label>
   <input id="speed" type="range" min="50" max="600" value="150" step="10" />
   <span id="speed-value">150 ms</span>
 </div>
 <div id="status">Press "Start Match" to begin the simulation.</div>
+<div class="view-toggle">
+  <button id="view-ascii" class="secondary">📝 ASCII View</button>
+  <button id="view-canvas">🎨 Canvas View</button>
+</div>
 <div class="boards">
   <div class="board">
     <h2 id="ai1-name">AI-1</h2>
+    <canvas id="canvas1" width="200" height="400" style="display: none;"></canvas>
     <pre id="board1"></pre>
   </div>
   <div class="board">
     <h2 id="ai2-name">AI-2</h2>
+    <canvas id="canvas2" width="200" height="400" style="display: none;"></canvas>
     <pre id="board2"></pre>
   </div>
 </div>
 <pre id="bank"></pre>
+
+<div class="stats-section" id="stats-section" style="display: none;">
+  <h2>📊 Match Statistics</h2>
+  <div class="stats-grid" id="stats-grid"></div>
+</div>
+
+<div class="tournament-section">
+  <h2>🏆 Tournament Mode</h2>
+  <div class="tournament-controls">
+    <label for="num-matches">Number of matches:</label>
+    <input id="num-matches" type="number" min="1" max="50" value="5" />
+    <button id="start-tournament">🎯 Run Tournament</button>
+    <button id="clear-tournament" class="secondary">🗑️ Clear Results</button>
+  </div>
+  <div id="tournament-results">
+    <h3>Results</h3>
+    <table id="tournament-table">
+      <thead>
+        <tr>
+          <th>Match #</th>
+          <th>Winner</th>
+          <th>AI-1 Score</th>
+          <th>AI-2 Score</th>
+          <th>Turns</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="tournament-tbody"></tbody>
+    </table>
+    <div style="margin-top: 16px; padding: 12px; background-color: #2a2a2a; border-radius: 4px;">
+      <strong>Summary:</strong>
+      <div id="tournament-summary"></div>
+    </div>
+  </div>
+</div>
+
 <footer>
   Powered by PyScript. Runs entirely in the browser without servers or binaries.
 </footer>
@@ -455,8 +651,136 @@ def bank_text(bank: FigureBank) -> str:
     return "\n".join(lines)
 
 
-running_match = False
+# --- Canvas Rendering --------------------------------------------------------
+
+def draw_board_canvas(ctx, board: GameBoard):
+    """Draw the game board on a canvas."""
+    cell_size = 20
+    ctx.fillStyle = "#000000"
+    ctx.fillRect(0, 0, 200, 400)
+    
+    for y in range(board.height):
+        for x in range(board.width):
+            if board.grid[y][x]:
+                ctx.fillStyle = "#39ff14"
+                ctx.fillRect(x * cell_size, y * cell_size, cell_size, cell_size)
+                ctx.strokeStyle = "#2a2a2a"
+                ctx.strokeRect(x * cell_size, y * cell_size, cell_size, cell_size)
+
+
+# --- UI State Management -----------------------------------------------------
+
+class MatchController:
+    def __init__(self):
+        self.arena = None
+        self.is_running = False
+        self.is_paused = False
+        self.current_task = None
+        self.match_stats = {
+            "turns": [],
+            "ai1_scores": [],
+            "ai2_scores": [],
+            "ai1_lines": [],
+            "ai2_lines": [],
+        }
+        
+    def update_ui(self):
+        if self.arena:
+            if use_canvas_view:
+                draw_board_canvas(ctx1, self.arena.board1)
+                draw_board_canvas(ctx2, self.arena.board2)
+            else:
+                board1_element.textContent = board_text(self.arena.board1)
+                board2_element.textContent = board_text(self.arena.board2)
+            bank_element.textContent = bank_text(self.arena.bank)
+        else:
+            board1_element.textContent = ""
+            board2_element.textContent = ""
+            bank_element.textContent = ""
+        
+    def update_status(self, state):
+        ai1_name = self.arena.ai1.name if self.arena else "AI-1"
+        ai2_name = self.arena.ai2.name if self.arena else "AI-2"
+        status_element.textContent = (
+            f"Turn {state['turn']} | Score {ai1_name}: {state['scores']['ai1']} | "
+            f"Score {ai2_name}: {state['scores']['ai2']}"
+        )
+        if state["finished"]:
+            status_element.textContent += (
+                f" | Winner: {state['winner']} (reason: {state['reason']})"
+            )
+    
+    def collect_stats(self, state):
+        self.match_stats["turns"].append(state["turn"])
+        self.match_stats["ai1_scores"].append(state["scores"]["ai1"])
+        self.match_stats["ai2_scores"].append(state["scores"]["ai2"])
+        self.match_stats["ai1_lines"].append(state["lines"]["ai1"])
+        self.match_stats["ai2_lines"].append(state["lines"]["ai2"])
+    
+    def display_stats(self):
+        if not self.arena:
+            return
+        
+        ai1_avg_time = self.arena.ai1.get_average_decision_time() * 1000
+        ai2_avg_time = self.arena.ai2.get_average_decision_time() * 1000
+        
+        stats_grid.innerHTML = f"""
+            <div class="stat-card">
+                <h4>AI-1 Final Score</h4>
+                <div class="value">{self.arena.board1.score}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-2 Final Score</h4>
+                <div class="value">{self.arena.board2.score}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-1 Lines Cleared</h4>
+                <div class="value">{self.arena.board1.lines_cleared}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-2 Lines Cleared</h4>
+                <div class="value">{self.arena.board2.lines_cleared}</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-1 Avg Decision Time</h4>
+                <div class="value">{ai1_avg_time:.1f} ms</div>
+            </div>
+            <div class="stat-card">
+                <h4>AI-2 Avg Decision Time</h4>
+                <div class="value">{ai2_avg_time:.1f} ms</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Turns</h4>
+                <div class="value">{self.arena.turn}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Bank Pieces Remaining</h4>
+                <div class="value">{self.arena.bank.get_total_remaining()}</div>
+            </div>
+        """
+        stats_section.style.display = "block"
+    
+    def update_buttons(self, running=None, paused=None, finished=False):
+        if running is not None:
+            self.is_running = running
+        if paused is not None:
+            self.is_paused = paused
+            
+        start_button.disabled = self.is_running
+        pause_button.disabled = not self.is_running or self.is_paused or finished
+        resume_button.disabled = not self.is_paused or finished
+        step_button.disabled = not self.is_paused or finished
+        restart_button.disabled = not self.is_running and not finished
+        export_button.disabled = not finished
+
+controller = MatchController()
+
 start_button = document.getElementById("start")
+pause_button = document.getElementById("pause")
+resume_button = document.getElementById("resume")
+step_button = document.getElementById("step")
+restart_button = document.getElementById("restart")
+export_button = document.getElementById("export-replay")
 status_element = document.getElementById("status")
 board1_element = document.getElementById("board1")
 board2_element = document.getElementById("board2")
@@ -465,58 +789,334 @@ ai1_name_element = document.getElementById("ai1-name")
 ai2_name_element = document.getElementById("ai2-name")
 speed_slider = document.getElementById("speed")
 speed_value = document.getElementById("speed-value")
+ai1_strategy_select = document.getElementById("ai1-strategy")
+ai2_strategy_select = document.getElementById("ai2-strategy")
+canvas1 = document.getElementById("canvas1")
+canvas2 = document.getElementById("canvas2")
+ctx1 = canvas1.getContext("2d")
+ctx2 = canvas2.getContext("2d")
+view_ascii_button = document.getElementById("view-ascii")
+view_canvas_button = document.getElementById("view-canvas")
+stats_section = document.getElementById("stats-section")
+stats_grid = document.getElementById("stats-grid")
+
+use_canvas_view = False
 
 
 def update_speed_label(event=None):
     speed_value.textContent = f"{speed_slider.value} ms"
 
 
-def reset_display():
-    board1_element.textContent = ""
-    board2_element.textContent = ""
-    bank_element.textContent = ""
-
-
 async def run_match(event=None):
-    global running_match
-    if running_match:
+    if controller.is_running:
         return
-    running_match = True
-    reset_display()
-    start_button.disabled = True
-    update_speed_label()
+    controller.is_running = True
+    controller.is_paused = False
+    controller.update_buttons()
+    
+    ai1_strategy = ai1_strategy_select.value
+    ai2_strategy = ai2_strategy_select.value
+    
     bank = FigureBank(initial_count=12)
-    ai1 = AIAgent("AI-1", strategy="greedy")
-    ai2 = AIAgent("AI-2", strategy="aggressive")
-    arena = Arena(ai1, ai2, bank, max_turns=320)
+    ai1 = AIAgent(f"AI-1 ({ai1_strategy.capitalize()})", strategy=ai1_strategy)
+    ai2 = AIAgent(f"AI-2 ({ai2_strategy.capitalize()})", strategy=ai2_strategy)
+    controller.arena = Arena(ai1, ai2, bank, max_turns=320)
+    
     ai1_name_element.textContent = ai1.name
     ai2_name_element.textContent = ai2.name
     status_element.textContent = "Match in progress..."
-    while True:
-        state = arena.step()
-        board1_element.textContent = board_text(arena.board1)
-        board2_element.textContent = board_text(arena.board2)
-        bank_element.textContent = bank_text(arena.bank)
-        status_element.textContent = (
-            f"Turn {state['turn']} | Score {ai1.name}: {state['scores']['ai1']} | "
-            f"Score {ai2.name}: {state['scores']['ai2']}"
-        )
+    
+    while controller.is_running:
+        if controller.is_paused:
+            await asyncio.sleep(0.1)
+            continue
+            
+        state = controller.arena.step()
+        controller.update_ui()
+        controller.update_status(state)
+        controller.collect_stats(state)
+        
         if state["finished"]:
-            status_element.textContent += (
-                f" | Winner: {state['winner']} (reason: {state['reason']})"
-            )
+            controller.is_running = False
+            controller.update_buttons(finished=True)
+            controller.display_stats()
             break
+            
         delay = max(int(speed_slider.value), 50) / 1000.0
         await asyncio.sleep(delay)
-    running_match = False
-    start_button.disabled = False
 
 
-start_handler = create_proxy(lambda event: asyncio.ensure_future(run_match(event)))
+def pause_match(event=None):
+    controller.is_paused = True
+    controller.update_buttons(paused=True)
+
+
+def resume_match(event=None):
+    controller.is_paused = False
+    controller.update_buttons(paused=False)
+
+
+async def step_match(event=None):
+    if not controller.is_paused or not controller.arena:
+        return
+    state = controller.arena.step()
+    controller.update_ui()
+    controller.update_status(state)
+    if state["finished"]:
+        controller.update_buttons(finished=True)
+
+
+def restart_match(event=None):
+    controller.is_running = False
+    controller.is_paused = False
+    controller.arena = None
+    controller.match_stats = {
+        "turns": [],
+        "ai1_scores": [],
+        "ai2_scores": [],
+        "ai1_lines": [],
+        "ai2_lines": [],
+    }
+    controller.update_buttons()
+    board1_element.textContent = ""
+    board2_element.textContent = ""
+    bank_element.textContent = ""
+    stats_section.style.display = "none"
+    status_element.textContent = "Press 'Start Match' to begin a new simulation."
+
+
+start_handler = create_proxy(lambda e: asyncio.ensure_future(run_match(e)))
+pause_handler = create_proxy(pause_match)
+resume_handler = create_proxy(resume_match)
+step_handler = create_proxy(lambda e: asyncio.ensure_future(step_match(e)))
+restart_handler = create_proxy(restart_match)
 speed_handler = create_proxy(update_speed_label)
+
 start_button.addEventListener("click", start_handler)
+pause_button.addEventListener("click", pause_handler)
+resume_button.addEventListener("click", resume_handler)
+step_button.addEventListener("click", step_handler)
+restart_button.addEventListener("click", restart_handler)
 speed_slider.addEventListener("input", speed_handler)
+
+controller.update_buttons()
 update_speed_label()
+
+
+# --- Tournament Mode ---------------------------------------------------------
+
+tournament_results = []
+start_tournament_button = document.getElementById("start-tournament")
+clear_tournament_button = document.getElementById("clear-tournament")
+num_matches_input = document.getElementById("num-matches")
+tournament_results_div = document.getElementById("tournament-results")
+tournament_tbody = document.getElementById("tournament-tbody")
+tournament_summary = document.getElementById("tournament-summary")
+
+
+async def run_tournament(event=None):
+    global tournament_results
+    if controller.is_running:
+        return
+    
+    num_matches = int(num_matches_input.value)
+    if num_matches < 1 or num_matches > 50:
+        status_element.textContent = "Please enter 1-50 matches"
+        return
+    
+    start_tournament_button.disabled = True
+    clear_tournament_button.disabled = True
+    start_button.disabled = True
+    status_element.textContent = f"Running tournament: 0/{num_matches} matches completed..."
+    
+    ai1_strategy = ai1_strategy_select.value
+    ai2_strategy = ai2_strategy_select.value
+    
+    for match_num in range(1, num_matches + 1):
+        bank = FigureBank(initial_count=12)
+        ai1 = AIAgent(f"AI-1 ({ai1_strategy.capitalize()})", strategy=ai1_strategy)
+        ai2 = AIAgent(f"AI-2 ({ai2_strategy.capitalize()})", strategy=ai2_strategy)
+        arena = Arena(ai1, ai2, bank, max_turns=320)
+        
+        state = None
+        while True:
+            state = arena.step()
+            if state["finished"]:
+                break
+            await asyncio.sleep(0.001)
+        
+        tournament_results.append({
+            "match": match_num,
+            "winner": state["winner"],
+            "ai1_score": state["scores"]["ai1"],
+            "ai2_score": state["scores"]["ai2"],
+            "turns": state["turn"],
+            "reason": state["reason"]
+        })
+        
+        status_element.textContent = f"Running tournament: {match_num}/{num_matches} matches completed..."
+        await asyncio.sleep(0.05)
+    
+    display_tournament_results()
+    start_tournament_button.disabled = False
+    clear_tournament_button.disabled = False
+    start_button.disabled = False
+    status_element.textContent = f"Tournament complete! {num_matches} matches finished."
+
+
+def display_tournament_results():
+    global tournament_results
+    if not tournament_results:
+        return
+    
+    tournament_tbody.innerHTML = ""
+    for result in tournament_results:
+        row = document.createElement("tr")
+        row.innerHTML = f"""
+            <td>{result['match']}</td>
+            <td><strong>{result['winner']}</strong></td>
+            <td>{result['ai1_score']}</td>
+            <td>{result['ai2_score']}</td>
+            <td>{result['turns']}</td>
+            <td>{result['reason']}</td>
+        """
+        tournament_tbody.appendChild(row)
+    
+    ai1_wins = sum(1 for r in tournament_results if r["winner"] == "AI-1")
+    ai2_wins = sum(1 for r in tournament_results if r["winner"] == "AI-2")
+    total = len(tournament_results)
+    avg_ai1_score = sum(r["ai1_score"] for r in tournament_results) / total
+    avg_ai2_score = sum(r["ai2_score"] for r in tournament_results) / total
+    avg_turns = sum(r["turns"] for r in tournament_results) / total
+    
+    tournament_summary.innerHTML = f"""
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px;">
+            <div>
+                <strong>AI-1 Wins:</strong> {ai1_wins}/{total} ({ai1_wins*100/total:.1f}%)<br/>
+                <strong>Avg Score:</strong> {avg_ai1_score:.0f}
+            </div>
+            <div>
+                <strong>AI-2 Wins:</strong> {ai2_wins}/{total} ({ai2_wins*100/total:.1f}%)<br/>
+                <strong>Avg Score:</strong> {avg_ai2_score:.0f}
+            </div>
+            <div>
+                <strong>Avg Turns:</strong> {avg_turns:.1f}<br/>
+                <strong>Total Matches:</strong> {total}
+            </div>
+        </div>
+    """
+    
+    tournament_results_div.classList.add("visible")
+
+
+def clear_tournament_results(event=None):
+    global tournament_results
+    tournament_results = []
+    tournament_tbody.innerHTML = ""
+    tournament_summary.innerHTML = ""
+    tournament_results_div.classList.remove("visible")
+    status_element.textContent = "Tournament results cleared."
+
+
+tournament_handler = create_proxy(lambda e: asyncio.ensure_future(run_tournament(e)))
+clear_handler = create_proxy(clear_tournament_results)
+start_tournament_button.addEventListener("click", tournament_handler)
+clear_tournament_button.addEventListener("click", clear_handler)
+
+
+# --- View Toggle -------------------------------------------------------------
+
+def switch_to_ascii(event=None):
+    global use_canvas_view
+    use_canvas_view = False
+    canvas1.style.display = "none"
+    canvas2.style.display = "none"
+    board1.style.display = "block"
+    board2.style.display = "block"
+    view_ascii_button.classList.add("secondary")
+    view_canvas_button.classList.remove("secondary")
+    if controller.arena:
+        controller.update_ui()
+
+
+def switch_to_canvas(event=None):
+    global use_canvas_view
+    use_canvas_view = True
+    canvas1.style.display = "block"
+    canvas2.style.display = "block"
+    board1.style.display = "none"
+    board2.style.display = "none"
+    view_ascii_button.classList.remove("secondary")
+    view_canvas_button.classList.add("secondary")
+    if controller.arena:
+        controller.update_ui()
+
+
+ascii_handler = create_proxy(switch_to_ascii)
+canvas_handler = create_proxy(switch_to_canvas)
+view_ascii_button.addEventListener("click", ascii_handler)
+view_canvas_button.addEventListener("click", canvas_handler)
+
+
+# --- Replay Export -----------------------------------------------------------
+
+def export_replay(event=None):
+    if not controller.arena or not controller.match_stats["turns"]:
+        return
+    
+    from js import Date
+    timestamp = Date.new().toISOString()
+    
+    replay_data = {
+        "version": "1.0",
+        "timestamp": timestamp,
+        "match_info": {
+            "ai1_name": controller.arena.ai1.name,
+            "ai2_name": controller.arena.ai2.name,
+            "ai1_strategy": controller.arena.ai1.strategy,
+            "ai2_strategy": controller.arena.ai2.strategy,
+            "max_turns": controller.arena.max_turns,
+        },
+        "final_state": {
+            "winner": "AI-1" if controller.arena.board1.score > controller.arena.board2.score else "AI-2",
+            "ai1_score": controller.arena.board1.score,
+            "ai2_score": controller.arena.board2.score,
+            "ai1_lines": controller.arena.board1.lines_cleared,
+            "ai2_lines": controller.arena.board2.lines_cleared,
+            "total_turns": controller.arena.turn,
+            "bank_remaining": controller.arena.bank.get_total_remaining(),
+        },
+        "statistics": {
+            "ai1_avg_decision_time_ms": controller.arena.ai1.get_average_decision_time() * 1000,
+            "ai2_avg_decision_time_ms": controller.arena.ai2.get_average_decision_time() * 1000,
+            "ai1_total_decisions": len(controller.arena.ai1.decision_times),
+            "ai2_total_decisions": len(controller.arena.ai2.decision_times),
+        },
+        "history": {
+            "turns": controller.match_stats["turns"],
+            "ai1_scores": controller.match_stats["ai1_scores"],
+            "ai2_scores": controller.match_stats["ai2_scores"],
+            "ai1_lines": controller.match_stats["ai1_lines"],
+            "ai2_lines": controller.match_stats["ai2_lines"],
+        }
+    }
+    
+    from js import JSON, Blob, URL, document as doc
+    json_str = JSON.stringify(replay_data, None, 2)
+    blob = Blob.new([json_str], {"type": "application/json"})
+    url = URL.createObjectURL(blob)
+    
+    link = doc.createElement("a")
+    link.href = url
+    link.download = f"tetris_replay_{timestamp.replace(':', '-').replace('.', '_')}.json"
+    link.click()
+    
+    URL.revokeObjectURL(url)
+    status_element.textContent = "Replay exported successfully!"
+
+
+export_handler = create_proxy(export_replay)
+export_button.addEventListener("click", export_handler)
 </py-script>
 </body>
 </html>
