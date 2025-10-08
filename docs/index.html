@@ -33,11 +33,32 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 0.95rem;
+}
+
+button:hover:not(:disabled) {
+  background-color: #1976d2;
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+button.secondary {
+  background-color: #424242;
+}
+
+button.secondary:hover:not(:disabled) {
+  background-color: #616161;
+}
+
+button.danger {
+  background-color: #d32f2f;
+}
+
+button.danger:hover:not(:disabled) {
+  background-color: #c62828;
 }
 
 label {
@@ -92,8 +113,12 @@ footer {
 <body>
 <h1>AI vs AI Tetris (PyScript)</h1>
 <div id="controls">
-  <button id="start">Start Match</button>
-  <label for="speed">Delay per frame:</label>
+  <button id="start">▶️ Start Match</button>
+  <button id="pause" disabled>⏸️ Pause</button>
+  <button id="resume" disabled>▶️ Resume</button>
+  <button id="step" disabled>⏭️ Step</button>
+  <button id="restart" class="secondary" disabled>🔄 Restart</button>
+  <label for="speed">Speed:</label>
   <input id="speed" type="range" min="50" max="600" value="150" step="10" />
   <span id="speed-value">150 ms</span>
 </div>
@@ -455,8 +480,51 @@ def bank_text(bank: FigureBank) -> str:
     return "\n".join(lines)
 
 
-running_match = False
+# --- UI State Management -----------------------------------------------------
+
+class MatchController:
+    def __init__(self):
+        self.arena = None
+        self.is_running = False
+        self.is_paused = False
+        self.current_task = None
+        
+    def update_ui(self):
+        board1_element.textContent = board_text(self.arena.board1) if self.arena else ""
+        board2_element.textContent = board_text(self.arena.board2) if self.arena else ""
+        bank_element.textContent = bank_text(self.arena.bank) if self.arena else ""
+        
+    def update_status(self, state):
+        ai1_name = self.arena.ai1.name if self.arena else "AI-1"
+        ai2_name = self.arena.ai2.name if self.arena else "AI-2"
+        status_element.textContent = (
+            f"Turn {state['turn']} | Score {ai1_name}: {state['scores']['ai1']} | "
+            f"Score {ai2_name}: {state['scores']['ai2']}"
+        )
+        if state["finished"]:
+            status_element.textContent += (
+                f" | Winner: {state['winner']} (reason: {state['reason']})"
+            )
+    
+    def update_buttons(self, running=None, paused=None, finished=False):
+        if running is not None:
+            self.is_running = running
+        if paused is not None:
+            self.is_paused = paused
+            
+        start_button.disabled = self.is_running
+        pause_button.disabled = not self.is_running or self.is_paused or finished
+        resume_button.disabled = not self.is_paused or finished
+        step_button.disabled = not self.is_paused or finished
+        restart_button.disabled = not self.is_running and not finished
+
+controller = MatchController()
+
 start_button = document.getElementById("start")
+pause_button = document.getElementById("pause")
+resume_button = document.getElementById("resume")
+step_button = document.getElementById("step")
+restart_button = document.getElementById("restart")
 status_element = document.getElementById("status")
 board1_element = document.getElementById("board1")
 board2_element = document.getElementById("board2")
@@ -471,51 +539,86 @@ def update_speed_label(event=None):
     speed_value.textContent = f"{speed_slider.value} ms"
 
 
-def reset_display():
-    board1_element.textContent = ""
-    board2_element.textContent = ""
-    bank_element.textContent = ""
-
-
 async def run_match(event=None):
-    global running_match
-    if running_match:
+    if controller.is_running:
         return
-    running_match = True
-    reset_display()
-    start_button.disabled = True
-    update_speed_label()
+    controller.is_running = True
+    controller.is_paused = False
+    controller.update_buttons()
+    
     bank = FigureBank(initial_count=12)
     ai1 = AIAgent("AI-1", strategy="greedy")
     ai2 = AIAgent("AI-2", strategy="aggressive")
-    arena = Arena(ai1, ai2, bank, max_turns=320)
+    controller.arena = Arena(ai1, ai2, bank, max_turns=320)
+    
     ai1_name_element.textContent = ai1.name
     ai2_name_element.textContent = ai2.name
     status_element.textContent = "Match in progress..."
-    while True:
-        state = arena.step()
-        board1_element.textContent = board_text(arena.board1)
-        board2_element.textContent = board_text(arena.board2)
-        bank_element.textContent = bank_text(arena.bank)
-        status_element.textContent = (
-            f"Turn {state['turn']} | Score {ai1.name}: {state['scores']['ai1']} | "
-            f"Score {ai2.name}: {state['scores']['ai2']}"
-        )
+    
+    while controller.is_running:
+        if controller.is_paused:
+            await asyncio.sleep(0.1)
+            continue
+            
+        state = controller.arena.step()
+        controller.update_ui()
+        controller.update_status(state)
+        
         if state["finished"]:
-            status_element.textContent += (
-                f" | Winner: {state['winner']} (reason: {state['reason']})"
-            )
+            controller.is_running = False
+            controller.update_buttons(finished=True)
             break
+            
         delay = max(int(speed_slider.value), 50) / 1000.0
         await asyncio.sleep(delay)
-    running_match = False
-    start_button.disabled = False
 
 
-start_handler = create_proxy(lambda event: asyncio.ensure_future(run_match(event)))
+def pause_match(event=None):
+    controller.is_paused = True
+    controller.update_buttons(paused=True)
+
+
+def resume_match(event=None):
+    controller.is_paused = False
+    controller.update_buttons(paused=False)
+
+
+async def step_match(event=None):
+    if not controller.is_paused or not controller.arena:
+        return
+    state = controller.arena.step()
+    controller.update_ui()
+    controller.update_status(state)
+    if state["finished"]:
+        controller.update_buttons(finished=True)
+
+
+def restart_match(event=None):
+    controller.is_running = False
+    controller.is_paused = False
+    controller.arena = None
+    controller.update_buttons()
+    board1_element.textContent = ""
+    board2_element.textContent = ""
+    bank_element.textContent = ""
+    status_element.textContent = "Press 'Start Match' to begin a new simulation."
+
+
+start_handler = create_proxy(lambda e: asyncio.ensure_future(run_match(e)))
+pause_handler = create_proxy(pause_match)
+resume_handler = create_proxy(resume_match)
+step_handler = create_proxy(lambda e: asyncio.ensure_future(step_match(e)))
+restart_handler = create_proxy(restart_match)
 speed_handler = create_proxy(update_speed_label)
+
 start_button.addEventListener("click", start_handler)
+pause_button.addEventListener("click", pause_handler)
+resume_button.addEventListener("click", resume_handler)
+step_button.addEventListener("click", step_handler)
+restart_button.addEventListener("click", restart_handler)
 speed_slider.addEventListener("input", speed_handler)
+
+controller.update_buttons()
 update_speed_label()
 </py-script>
 </body>
